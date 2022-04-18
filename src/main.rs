@@ -1,6 +1,6 @@
 use fltk::{enums::{Align, Color, Font, FrameType}, prelude::*, *, };
 
-use std::thread;
+use std::{thread, time};
 use linux_embedded_hal::Pin;
 use linux_embedded_hal::sysfs_gpio::Direction;
 use hd44780_hal::HD44780;
@@ -10,9 +10,9 @@ use rppal::{spi::{Spi, Bus, SlaveSelect, Mode, Error},hal::Delay};
 use hx711_spi::Hx711;
 use nb::block;
 
-const one_kg_value: f32 = 130670.0;
+const ONE_KG_VALUE: f32 = 130670.0;
 const N: f32 = 30.0;
-const ReadLoopCount: u8 = 5;
+const READ_LOOP_COUNT: u8 = 5;
 
 
 
@@ -24,38 +24,50 @@ const WIDTH: i32 = 800;
 const HEIGHT: i32 = 500;
 
 struct AdcData{
-    adcRawVal: f32,
-    adcVal : f32,
-    zeroVal: f32,
-    taraVal: f32,
-    kgVal: f32,
-    previousKgVal: f32,
+    adc_raw_val: f32,
+    adc_val : f32,
+    zero_val: f32,
+    tara_val: f32,
+    kg_val: f32,
+    previous_kg_val: f32,
+}
+
+fn callback(app: app::App) {
+    app.redraw();
+    // println!("TICK");
+    app::repeat_timeout(0.005, Box::new(move || {
+        callback(app);
+    }));
 }
 
 fn main() -> Result<(), Error> {
-    let app = app::App::default();
+    let app = app::App::default().with_scheme(app::Scheme::Gleam);
     let mut win = window::Window::default()
         .with_size(WIDTH, HEIGHT)
         .with_label("Smart Messroom");
     let mut bar =
         frame::Frame::new(0, 0, WIDTH, 60, "  Customer #4").with_align(Align::Left | Align::Inside);
     let mut product_label = frame::Frame::default()
-        .with_size(100, 40)
+        .with_size(200, 40)
         .center_of(&win)
-        .with_label("Almond nuts");
+        .with_label("Hazelnuts");
     let mut calc_status = frame::Frame::default()
-        .size_of(&product_label)
+        .with_size(200, 40)
         .below_of(&product_label, 0)
-        .with_label("Almost there...");
+        .with_label("");
     let mut weight_lbl = frame::Frame::default()
-        .size_of(&calc_status)
+        .with_size(200, 40)
+        //.size_of(&calc_status)
         .below_of(&calc_status, 0)
-        .with_label("0");
+        .with_label("--- g.");
     let mut but = button::Button::new(WIDTH - 220, HEIGHT - 80, 200, 60, "Confirm"); //@+6plus
         
     win.end();
     win.make_resizable(true);
     win.show();
+    app::add_timeout(0.005, Box::new(move || {
+        callback(app);
+    }));
 
     // Theming
     app::background(255, 255, 255);
@@ -88,19 +100,19 @@ fn main() -> Result<(), Error> {
     but.set_callback(move |_| {
         //let label = (weight_lbl.label().parse::<i32>().unwrap() + 1).to_string();
        // weight_lbl.set_label(&label);
+       println!("Button pressed");
     });
 
-    app.run().unwrap();
+    //app.run().unwrap();
     //done with GUI inits
-
-
-    let mut ADC = AdcData{
-        adcRawVal: 0.0,
-        adcVal : 0.0,
-        zeroVal: 0.0,
-        taraVal: 0.0,
-        kgVal: 0.0,
-        previousKgVal: 0.0,
+    
+    let mut adc = AdcData{
+        adc_raw_val: 0.0,
+        adc_val : 0.0,
+        zero_val: 0.0,
+        tara_val: 0.0,
+        kg_val: 0.0,
+        previous_kg_val: 0.0,
     };
 
     //hx711 declarations
@@ -108,16 +120,16 @@ fn main() -> Result<(), Error> {
     let mut hx711 = Hx711::new(spi, Delay::new());
     
     //init the screen
-	hx711.reset()?;
+    hx711.reset()?;
 
     //calibration (tara)
     for i in 0..N as i32 {
         let reading = block!(hx711.read()).unwrap() as f32;
         println!("{:>2}: {}", i, reading);
-        ADC.zeroVal += reading;
+        adc.zero_val += reading;
     }
-    ADC.zeroVal /= N; //tara
-    println!("Tara: {}", ADC.zeroVal);
+    adc.zero_val /= N; //tara
+    println!("Tara: {}", adc.zero_val);
 
     //screen declarations
     let rs = Pin::new(13);
@@ -159,7 +171,7 @@ fn main() -> Result<(), Error> {
     lcd.reset();
     lcd.clear();
     lcd.set_display_mode(true, false, false);
-    lcd.write_str("Customer nr. 4");
+    lcd.write_str("Customer #4");
 
     lcd.set_cursor_pos(40);
     lcd.write_str("WELCOME!");
@@ -169,32 +181,34 @@ fn main() -> Result<(), Error> {
     
     let mut counter: u8 = 0;
     let mut flag: bool = false;
-    loop {
-        ADC.previousKgVal = ADC.kgVal;
-        ADC.adcVal = 0.0;
+    
+    while app.wait()
+    {
+        adc.previous_kg_val = adc.kg_val;
+        adc.adc_val = 0.0;
         
-        for _ in 0..ReadLoopCount {
-            ADC.adcRawVal = block!(hx711.read()).unwrap() as f32;
-            ADC.adcVal += ADC.adcRawVal;
+        for _ in 0..READ_LOOP_COUNT {
+            adc.adc_raw_val = block!(hx711.read()).unwrap() as f32;
+            adc.adc_val += adc.adc_raw_val;
         }
-        ADC.adcVal /= ReadLoopCount as f32;
-        ADC.taraVal = ADC.adcVal-ADC.zeroVal;
-        ADC.kgVal = ADC.taraVal/one_kg_value;
+        adc.adc_val /= READ_LOOP_COUNT as f32;
+        adc.tara_val = adc.adc_val-adc.zero_val;
+        adc.kg_val = adc.tara_val/ONE_KG_VALUE;
         println!(
             "Read: {} --- Tara val: {} --- kg: {:.3}", 
-            ADC.adcVal as i32, 
-            ADC.taraVal as i32, 
-            ADC.kgVal);
+            adc.adc_val as i32, 
+            adc.tara_val as i32, 
+            adc.kg_val);
                 
-        if (ADC.kgVal - ADC.previousKgVal) > 0.002 {
-            println!("--- START LISTENING --- {}", ADC.kgVal - ADC.previousKgVal);
+        if (adc.kg_val - adc.previous_kg_val) > 0.002 {
+            println!("--- START LISTENING --- {}", adc.kg_val - adc.previous_kg_val);
             lcd.set_cursor_pos(40);
             lcd.write_str("Calculating...");
             calc_status.set_label("Calculating...");
         }
 
-        if (ADC.previousKgVal - ADC.kgVal) > 0.002 {
-            println!("---STOP LISTENING--- To be added: {:.3}", ADC.kgVal);
+        if (adc.previous_kg_val - adc.kg_val) > 0.002 {
+            println!("---STOP LISTENING--- To be added: {:.3}", adc.kg_val);
             lcd.set_cursor_pos(40);
             lcd.write_str("Almost there...");
             calc_status.set_label("Almost there...");
@@ -206,25 +220,25 @@ fn main() -> Result<(), Error> {
         if flag == true {
             counter += 1;
             lcd.set_cursor_pos(30);
-            let s = format!("{:.0} g.   ", (ADC.kgVal * 1000.0).abs());
+            let s = format!("{:.0} g.   ", (adc.kg_val * 1000.0).abs());
             lcd.write_str(&s);
             weight_lbl.set_label(&s);
             if counter == 5{
-                println!("{:.3} added to customer", ADC.kgVal);
+                println!("{:.3} added to customer", adc.kg_val);
                 
                 lcd.set_cursor_pos(40);
-                lcd.write_str("Green salad:   ");
+                lcd.write_str("Hazelnuts:      ");
+                calc_status.set_label("Done. Press Confirm.");
                 flag = false;
                 counter = 0;
             }
         }
+        thread::sleep(time::Duration::from_millis(50));
         
-    }
-
-    
-
-    
-
-
-
+    }   
+    Ok(()) 
+      
 }
+    
+
+
