@@ -18,7 +18,9 @@ As per this moment it can show the load cell ADC data on the 2004 LCD screen. (I
 
 Update: It can now show not only raw values but also the values converted in grams and kilograms!
 
-Update 14.04.: It can now show the quantity of food taken from the weight scale.
+Update 14.04: It can now show the quantity of food taken from the weight scale.
+
+Update 18.04: We now have a GUI!
 
 The near-future goals for the Smart Messroom are (TODO):
 
@@ -30,6 +32,6 @@ The near-future goals for the Smart Messroom are (TODO):
 
 The long-term goals for this system are the following:
  - Calibration funcion (tara) while program running. (Currently the calibration value is hard coded)
- - (DONE!) Having a touch-friendly GUI on the 7-inch Touchscreen for the worker to operate with the device. (Currently testing various GUI libraries  suitable for Raspberry Pi)
+ - (Almost Done!) Having a touch-friendly GUI on the 7-inch Touchscreen for the worker to operate with the device. (Currently testing FLTK-RS library.)
  - Having a payment system integrated, eventually with cryptocurrency or fiat currency.
 
