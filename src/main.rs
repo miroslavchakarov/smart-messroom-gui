@@ -70,7 +70,7 @@ fn main() -> Result<(), Error> {
     let mut new_customer_btn = button::Button::new(60, 80, 200, 110, "New customer")
         //.with_align(Align::Left | Align::Inside)
         .below_of(&bar, 10);
-    let mut product_label = frame::Frame::new(300, 200, 300, 40, "Hazelnuts");
+    let mut product_label = frame::Frame::new(300, 170, 300, 40, "Hazelnuts");
         //.with_size(300, 40)
         //.below_of(&bar, 200);
         //.center_of(&win)
@@ -78,16 +78,16 @@ fn main() -> Result<(), Error> {
         //.with_label("Hazelnuts");
     let mut calc_status = frame::Frame::default()
         .with_size(300, 60)
-        .below_of(&product_label, 40)
+        .below_of(&product_label, 90)
        // .with_align(Align::Center)
         .with_label("");
     let mut weight_lbl = frame::Frame::default()
-        .with_size(400, 60)
+        .with_size(350, 60)
         //.size_of(&calc_status)
-        .below_of(&calc_status, 40)
+        .below_of(&calc_status, 90)
         //.with_align(Align::Center)
         .with_label("--- g.");
-    let mut confirm_btn = button::Button::new(350, 500, 180, 80, "Confirm");
+    let mut confirm_btn = button::Button::new(350, HEIGHT - 120, 180, 80, "Confirm");
        // .below_of(&weight_lbl, 30);
         confirm_btn.hide();
     let mut products_bar = frame::Frame::new(WIDTH - 250, 90, 200, 90, "Products added:")
@@ -107,15 +107,12 @@ fn main() -> Result<(), Error> {
     let mut pack = group::Pack::default_fill();
     pack.begin();
     let mut bar2 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  440 g.");
+    bar2.set_label_size(21);
     let mut bar3 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
-    bar3.set_label_size(22);
-    let mut bar4 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  950 g.");
-    let mut bar5 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
-    let mut bar6 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
-    let mut bar7 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
-    let mut bar8 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
+    bar3.set_label_size(21);
+    
     pack.end();
-    scroll.scroll_to(0, 0);
+    //scroll.scroll_to(0, 0);
     scroll.end();
 
     win.end();
@@ -138,8 +135,8 @@ fn main() -> Result<(), Error> {
         draw::draw_rectf(0, b.height(), b.width(), 1);
     });
 
-    bar2.set_frame(FrameType::FlatBox);
-    bar2.set_label_size(22);
+   
+    
     
 
     products_bar.set_frame(FrameType::FlatBox);
@@ -151,29 +148,29 @@ fn main() -> Result<(), Error> {
     //     draw::draw_rectf(0, b.height(), b.width(), 1);
     // });
 
-    calc_status.set_label_size(18);
+    calc_status.set_label_size(24);
     calc_status.set_label_font(Font::Times);
 
-    product_label.set_label_size(30);
+    product_label.set_label_size(50);
 
-    weight_lbl.set_label_size(36);
+    weight_lbl.set_label_size(46);
     weight_lbl.set_label_color(GRAY);
 
     pay_btn.set_color(BLUE);
     pay_btn.set_selection_color(SEL_BLUE);
     pay_btn.set_label_color(Color::White);
-    pay_btn.set_label_size(28);
+    pay_btn.set_label_size(35);
    // pay_btn.set_frame(FrameType::GtkUpBox);
   
     confirm_btn.set_color(BLUE);
     confirm_btn.set_selection_color(SEL_BLUE);
     confirm_btn.set_label_color(Color::White);
-    confirm_btn.set_label_size(24);
+    confirm_btn.set_label_size(32);
 
     new_customer_btn.set_color(BLUE);
     new_customer_btn.set_selection_color(SEL_BLUE);
     new_customer_btn.set_label_color(Color::White);
-    new_customer_btn.set_label_size(20);
+    new_customer_btn.set_label_size(25);
     //new_customer_btn.set_frame(FrameType::GtkUpBox);
     // End theming
 
@@ -288,15 +285,17 @@ fn main() -> Result<(), Error> {
             adc.tara_val as i32, 
             adc.kg_val);
                 
-        if (adc.kg_val - adc.previous_kg_val) > 0.001 {
+        if (adc.kg_val - adc.previous_kg_val) > 0.0015 {
             println!("--- START LISTENING --- {}", adc.kg_val - adc.previous_kg_val);
             lcd.set_cursor_pos(40);
             lcd.write_str("Calculating...");
             calc_status.set_label("Calculating...");
             confirm_btn.hide();
+            flag = true;
+            counter = 0;
         }
 
-        if (adc.previous_kg_val - adc.kg_val) > 0.001 {
+        if (adc.previous_kg_val - adc.kg_val) > 0.0015 {
             println!("---STOP LISTENING--- To be added: {:.3}", adc.kg_val);
             lcd.set_cursor_pos(40);
             lcd.write_str("Almost there...");
@@ -314,16 +313,25 @@ fn main() -> Result<(), Error> {
             lcd.write_str(&s);
             weight_lbl.set_label(&s);
             if counter == 5{
-                println!("{:.3} added to customer", adc.kg_val);
-                lcd.set_cursor_pos(40);
-                lcd.write_str("Hazelnuts:      ");
-                calc_status.set_label("Done.\nPress Confirm to continue.");
-                confirm_btn.show();
-                pack.begin();
-                //let together: &str = format!("{}{}", "Almonds: \n" as &str, adc.kg_val );
+                if adc.kg_val.abs() > 0.001 {
+                    println!("{:.3} added to customer", adc.kg_val);
+                    lcd.set_cursor_pos(40);
+                    lcd.write_str("Hazelnuts:      ");
+                    calc_status.set_label("Done.\n\nPress Confirm to continue or\nreturn the food to reset.");
+                    confirm_btn.show();
+                    pack.begin();
+                    let un = format!("{}{}", "Almonds: \n", adc.kg_val );
+                    
+                    let mut barX = frame::Frame::new(0, 0, 200, 90, "Almonds");
+                    pack.end();
+                }
+                else{
+                    println!("Quantity returned");
+                    lcd.set_cursor_pos(40);
+                    lcd.write_str("Returned      ");
+                    calc_status.set_label("Food returned.\n\nContinue with another product\n or tap Pay to continue.");
+                }
                 
-                let mut barX = frame::Frame::new(0, 0, 200, 90, "Almonds");
-                pack.end();
                 flag = false;
                 counter = 0;
             }
