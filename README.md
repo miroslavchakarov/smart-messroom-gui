@@ -1,11 +1,11 @@
 
-This is an example of the 2004 LCD screen and HX711 ADC up and running on Rust and Raspberry Pi.
+This is the 2004 LCD screen and HX711 ADC up and running on Rust and Raspberry Pi.
 
 More about the system:
 
 This is a system called Smart Messroom, built in 2018 on Raspberry Pi and Windows IoT Core. It is now being rebuilt and will soon be able to run on Rust for a high level of protection and speed. 
-The system is not a weight scale! It measures food all the time. After a certain amount of food has been lifted from the food container, it starts calculating the difference in weight between NOW and the time the weight started to differ (food to be taken).
-It also contains a 7-inch LCD screen.
+Note: The system is not a weight scale! It measures food all the time. After a certain amount of food has been lifted from the food container, it starts calculating the difference in weight between NOW and the time the weight started to differ (food to be taken).
+It also has a 7-inch LCD screen.
 
 See more on the video below:
 

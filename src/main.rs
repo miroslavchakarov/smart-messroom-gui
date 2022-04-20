@@ -1,6 +1,9 @@
 use fltk::{enums::{Align, Color, Font, FrameType}, prelude::*, *, };
+use fltk_theme::{widget_themes, WidgetTheme, ThemeType};
+use fltk_theme::{WidgetScheme, SchemeType};
 
-use std::{thread, time};
+//use std::{thread, time};
+
 use linux_embedded_hal::Pin;
 use linux_embedded_hal::sysfs_gpio::Direction;
 use hd44780_hal::HD44780;
@@ -14,14 +17,24 @@ const ONE_KG_VALUE: f32 = 130670.0;
 const N: f32 = 30.0;
 const READ_LOOP_COUNT: u8 = 5;
 
-
-
 const BLUE: Color = Color::from_hex(0x42A5F5);
 const SEL_BLUE: Color = Color::from_hex(0x2196F3);
 const GRAY: Color = Color::from_hex(0x757575);
 const GREEN: Color = Color::from_hex(0x9CC28F);
-const WIDTH: i32 = 800;
-const HEIGHT: i32 = 500;
+const WIDTH: i32 = 1024;
+const HEIGHT: i32 = 768;
+
+struct Customer{
+    id: u64,
+    product: String,
+    quantity: f32,
+}
+
+impl Customer{
+    fn add_new_customer(id: u64, prod: String, quant: f32){
+
+    }
+}
 
 struct AdcData{
     adc_raw_val: f32,
@@ -34,34 +47,77 @@ struct AdcData{
 
 fn callback(app: app::App) {
     app.redraw();
-    // println!("TICK");
     app::repeat_timeout(0.005, Box::new(move || {
         callback(app);
     }));
 }
 
+fn add_product(product: String, quantity: u32){
+    //let mut s: &str = &format!("{}: \n{} g.", product, quantity).to_owned();
+    
+   // let mut bar4 = frame::Frame::new(0, 0, 200, 90, s);
+}
+
 fn main() -> Result<(), Error> {
     let app = app::App::default().with_scheme(app::Scheme::Gleam);
+    let widget_scheme = WidgetScheme::new(SchemeType::Aqua);
+    widget_scheme.apply();
     let mut win = window::Window::default()
         .with_size(WIDTH, HEIGHT)
         .with_label("Smart Messroom");
     let mut bar =
-        frame::Frame::new(0, 0, WIDTH, 60, "  Customer #4").with_align(Align::Left | Align::Inside);
-    let mut product_label = frame::Frame::default()
-        .with_size(200, 40)
-        .center_of(&win)
-        .with_label("Hazelnuts");
+        frame::Frame::new(0, 0, WIDTH, 80, "  Customer #4").with_align(Align::Left | Align::Inside);
+    let mut new_customer_btn = button::Button::new(60, 80, 200, 110, "New customer")
+        //.with_align(Align::Left | Align::Inside)
+        .below_of(&bar, 10);
+    let mut product_label = frame::Frame::new(300, 200, 300, 40, "Hazelnuts");
+        //.with_size(300, 40)
+        //.below_of(&bar, 200);
+        //.center_of(&win)
+        //.with_align(Align::Center | Align::Inside);
+        //.with_label("Hazelnuts");
     let mut calc_status = frame::Frame::default()
-        .with_size(200, 40)
-        .below_of(&product_label, 0)
+        .with_size(300, 60)
+        .below_of(&product_label, 40)
+       // .with_align(Align::Center)
         .with_label("");
     let mut weight_lbl = frame::Frame::default()
-        .with_size(200, 40)
+        .with_size(400, 60)
         //.size_of(&calc_status)
-        .below_of(&calc_status, 0)
+        .below_of(&calc_status, 40)
+        //.with_align(Align::Center)
         .with_label("--- g.");
-    let mut but = button::Button::new(WIDTH - 220, HEIGHT - 80, 200, 60, "Confirm"); //@+6plus
-        
+    let mut confirm_btn = button::Button::new(350, 500, 180, 80, "Confirm");
+       // .below_of(&weight_lbl, 30);
+        confirm_btn.hide();
+    let mut products_bar = frame::Frame::new(WIDTH - 250, 90, 200, 90, "Products added:")
+        .with_align(Align::Right | Align::Inside);
+    let mut pay_btn = button::Button::new(WIDTH - 230, HEIGHT - 120, 220, 110, "Pay"); //@+6plus
+    //let mut spin = Progress::new(0,0,0);
+
+    // let mut scroll = group::Scroll::new(WIDTH - 240, 30, 250, HEIGHT-150, "Products taken")
+    //     .with_type(group::ScrollType::Vertical)
+    //     .below_of(&products_bar, 10);
+    
+    let mut scroll = group::Scroll::new(WIDTH - 320, 50, 250, HEIGHT-300, None)
+        .with_type(group::ScrollType::Vertical)
+        .below_of(&products_bar, 0);
+    let mut scrollbar = scroll.scrollbar();
+        scrollbar.set_type(valuator::ScrollbarType::VerticalNice);
+    let mut pack = group::Pack::default_fill();
+    pack.begin();
+    let mut bar2 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  440 g.");
+    let mut bar3 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
+    bar3.set_label_size(22);
+    let mut bar4 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  950 g.");
+    let mut bar5 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
+    let mut bar6 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
+    let mut bar7 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
+    let mut bar8 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
+    pack.end();
+    scroll.scroll_to(0, 0);
+    scroll.end();
+
     win.end();
     win.make_resizable(true);
     win.show();
@@ -82,6 +138,19 @@ fn main() -> Result<(), Error> {
         draw::draw_rectf(0, b.height(), b.width(), 1);
     });
 
+    bar2.set_frame(FrameType::FlatBox);
+    bar2.set_label_size(22);
+    
+
+    products_bar.set_frame(FrameType::FlatBox);
+    products_bar.set_label_size(22);
+    // products_bar.set_label_color(Color::White);
+    // products_bar.set_color(GREEN);
+    // products_bar.draw(|b| {
+    //     draw::set_draw_rgb_color(211, 211, 211);
+    //     draw::draw_rectf(0, b.height(), b.width(), 1);
+    // });
+
     calc_status.set_label_size(18);
     calc_status.set_label_font(Font::Times);
 
@@ -90,17 +159,36 @@ fn main() -> Result<(), Error> {
     weight_lbl.set_label_size(36);
     weight_lbl.set_label_color(GRAY);
 
-    but.set_color(BLUE);
-    but.set_selection_color(SEL_BLUE);
-    but.set_label_color(Color::White);
-    but.set_label_size(28);
-    but.set_frame(FrameType::RFlatBox);
+    pay_btn.set_color(BLUE);
+    pay_btn.set_selection_color(SEL_BLUE);
+    pay_btn.set_label_color(Color::White);
+    pay_btn.set_label_size(28);
+   // pay_btn.set_frame(FrameType::GtkUpBox);
+  
+    confirm_btn.set_color(BLUE);
+    confirm_btn.set_selection_color(SEL_BLUE);
+    confirm_btn.set_label_color(Color::White);
+    confirm_btn.set_label_size(24);
+
+    new_customer_btn.set_color(BLUE);
+    new_customer_btn.set_selection_color(SEL_BLUE);
+    new_customer_btn.set_label_color(Color::White);
+    new_customer_btn.set_label_size(20);
+    //new_customer_btn.set_frame(FrameType::GtkUpBox);
     // End theming
 
-    but.set_callback(move |_| {
+    pay_btn.set_callback(move |_| {
         //let label = (weight_lbl.label().parse::<i32>().unwrap() + 1).to_string();
        // weight_lbl.set_label(&label);
        println!("Button pressed");
+    });
+    confirm_btn.set_callback(move |_| {
+        //let label = (weight_lbl.label().parse::<i32>().unwrap() + 1).to_string();
+       // weight_lbl.set_label(&label);
+       println!("Confirm pressed");
+    });
+    new_customer_btn.set_callback(move |_| {
+       println!("New Customer pressed");
     });
 
     //app.run().unwrap();
@@ -171,7 +259,7 @@ fn main() -> Result<(), Error> {
     lcd.reset();
     lcd.clear();
     lcd.set_display_mode(true, false, false);
-    lcd.write_str("Customer #4");
+    lcd.write_str("Smart Messroom");
 
     lcd.set_cursor_pos(40);
     lcd.write_str("WELCOME!");
@@ -192,26 +280,28 @@ fn main() -> Result<(), Error> {
             adc.adc_val += adc.adc_raw_val;
         }
         adc.adc_val /= READ_LOOP_COUNT as f32;
-        adc.tara_val = adc.adc_val-adc.zero_val;
-        adc.kg_val = adc.tara_val/ONE_KG_VALUE;
+        adc.tara_val = adc.adc_val - adc.zero_val;
+        adc.kg_val = adc.tara_val / ONE_KG_VALUE;
         println!(
             "Read: {} --- Tara val: {} --- kg: {:.3}", 
             adc.adc_val as i32, 
             adc.tara_val as i32, 
             adc.kg_val);
                 
-        if (adc.kg_val - adc.previous_kg_val) > 0.002 {
+        if (adc.kg_val - adc.previous_kg_val) > 0.001 {
             println!("--- START LISTENING --- {}", adc.kg_val - adc.previous_kg_val);
             lcd.set_cursor_pos(40);
             lcd.write_str("Calculating...");
             calc_status.set_label("Calculating...");
+            confirm_btn.hide();
         }
 
-        if (adc.previous_kg_val - adc.kg_val) > 0.002 {
+        if (adc.previous_kg_val - adc.kg_val) > 0.001 {
             println!("---STOP LISTENING--- To be added: {:.3}", adc.kg_val);
             lcd.set_cursor_pos(40);
             lcd.write_str("Almost there...");
             calc_status.set_label("Almost there...");
+            confirm_btn.hide();
 
             flag = true;
             counter = 0;
@@ -225,19 +315,22 @@ fn main() -> Result<(), Error> {
             weight_lbl.set_label(&s);
             if counter == 5{
                 println!("{:.3} added to customer", adc.kg_val);
-                
                 lcd.set_cursor_pos(40);
                 lcd.write_str("Hazelnuts:      ");
-                calc_status.set_label("Done. Press Confirm.");
+                calc_status.set_label("Done.\nPress Confirm to continue.");
+                confirm_btn.show();
+                pack.begin();
+                //let together: &str = format!("{}{}", "Almonds: \n" as &str, adc.kg_val );
+                
+                let mut barX = frame::Frame::new(0, 0, 200, 90, "Almonds");
+                pack.end();
                 flag = false;
                 counter = 0;
             }
         }
-        thread::sleep(time::Duration::from_millis(50));
-        
+        //thread::sleep(time::Duration::from_millis(50));   
     }   
     Ok(()) 
-      
 }
     
 

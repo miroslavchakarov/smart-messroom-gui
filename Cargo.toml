@@ -7,6 +7,7 @@ edition = "2021"
 
 [dependencies]
 fltk = "^1.3"
+fltk-theme = "0.4.2"
 
 hd44780-hal = "0.2.1"
 linux-embedded-hal = "0.2"
