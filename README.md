@@ -21,6 +21,7 @@ Update: It can now show not only raw values but also the values converted in gra
 Update 14.04: It can now show the quantity of food taken from the weight scale.
 
 Update 18.04: We now have a working GUI!
+Update 20.04: it can now reset the amount if customer changed his mind
 
 The near-future goals for the Smart Messroom are (TODO):
 
