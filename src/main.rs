@@ -24,6 +24,8 @@ const GREEN: Color = Color::from_hex(0x9CC28F);
 const WIDTH: i32 = 1024;
 const HEIGHT: i32 = 768;
 
+static mut kgval : f32 = 0.0;
+
 struct Customer{
     id: u64,
     product: String,
@@ -58,18 +60,34 @@ fn add_product(product: String, quantity: u32){
    // let mut bar4 = frame::Frame::new(0, 0, 200, 90, s);
 }
 
+
+
 fn main() -> Result<(), Error> {
+
+    let mut adc = AdcData{
+        adc_raw_val: 0.0,
+        adc_val : 0.0,
+        zero_val: 0.0,
+        tara_val: 0.0,
+        kg_val: 0.0,
+        previous_kg_val: 0.0,
+    };
+
     let app = app::App::default().with_scheme(app::Scheme::Gleam);
     let widget_scheme = WidgetScheme::new(SchemeType::Aqua);
     widget_scheme.apply();
     let mut win = window::Window::default()
         .with_size(WIDTH, HEIGHT)
         .with_label("Smart Messroom");
-    let mut bar =
-        frame::Frame::new(0, 0, WIDTH, 80, "  Customer #4").with_align(Align::Left | Align::Inside);
+    let mut bar = frame::Frame::new(0, 0, WIDTH, 80, "  Customer #4")
+        .with_align(Align::Left | Align::Inside);
     let mut new_customer_btn = button::Button::new(60, 80, 200, 110, "New customer")
         //.with_align(Align::Left | Align::Inside)
         .below_of(&bar, 10);
+        new_customer_btn.hide();
+    let mut calibration_btn = button::Button::new(60, 160, 200, 110, "Calibration")
+        .below_of(&new_customer_btn, 10);
+        
     let mut product_label = frame::Frame::new(300, 170, 300, 40, "Hazelnuts");
         //.with_size(300, 40)
         //.below_of(&bar, 200);
@@ -106,10 +124,7 @@ fn main() -> Result<(), Error> {
         scrollbar.set_type(valuator::ScrollbarType::VerticalNice);
     let mut pack = group::Pack::default_fill();
     pack.begin();
-    let mut bar2 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  440 g.");
-    bar2.set_label_size(21);
-    let mut bar3 = frame::Frame::new(0, 0, 200, 90, "  Almonds: \n  700 g.");
-    bar3.set_label_size(21);
+    
     
     pack.end();
     //scroll.scroll_to(0, 0);
@@ -174,31 +189,46 @@ fn main() -> Result<(), Error> {
     //new_customer_btn.set_frame(FrameType::GtkUpBox);
     // End theming
 
+    calibration_btn.set_color(BLUE);
+    calibration_btn.set_selection_color(SEL_BLUE);
+    calibration_btn.set_label_color(Color::White);
+    calibration_btn.set_label_size(25);
+
     pay_btn.set_callback(move |_| {
-        //let label = (weight_lbl.label().parse::<i32>().unwrap() + 1).to_string();
-       // weight_lbl.set_label(&label);
-       println!("Button pressed");
+        
+        println!("Button pressed");
     });
     confirm_btn.set_callback(move |_| {
-        //let label = (weight_lbl.label().parse::<i32>().unwrap() + 1).to_string();
-       // weight_lbl.set_label(&label);
-       println!("Confirm pressed");
+       
+        println!("Confirm pressed");
+        pack.begin();
+        //let un = format!("{}", kgval).as_str();
+
+        let mut bar_x = frame::Frame::new(0, 0, 200, 40, "Almonds");
+        bar_x.set_label_size(21);
+        unsafe{
+            let mut bar_y = frame::Frame::default()
+                .with_label(format!("{:.0} g.", (kgval)).as_str())
+                .with_size(200, 40);
+                bar_y.set_label_size(21);
+                    
+        }
+        pack.end();
+
+        
     });
     new_customer_btn.set_callback(move |_| {
        println!("New Customer pressed");
     });
 
+    calibration_btn.set_callback(move |_| {
+        
+     });
+
     //app.run().unwrap();
     //done with GUI inits
     
-    let mut adc = AdcData{
-        adc_raw_val: 0.0,
-        adc_val : 0.0,
-        zero_val: 0.0,
-        tara_val: 0.0,
-        kg_val: 0.0,
-        previous_kg_val: 0.0,
-    };
+    
 
     //hx711 declarations
     let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 1_000_000, Mode::Mode0)?;
@@ -267,6 +297,7 @@ fn main() -> Result<(), Error> {
     let mut counter: u8 = 0;
     let mut flag: bool = false;
     
+    
     while app.wait()
     {
         adc.previous_kg_val = adc.kg_val;
@@ -279,11 +310,13 @@ fn main() -> Result<(), Error> {
         adc.adc_val /= READ_LOOP_COUNT as f32;
         adc.tara_val = adc.adc_val - adc.zero_val;
         adc.kg_val = adc.tara_val / ONE_KG_VALUE;
+       
         println!(
             "Read: {} --- Tara val: {} --- kg: {:.3}", 
             adc.adc_val as i32, 
             adc.tara_val as i32, 
-            adc.kg_val);
+            adc.kg_val
+            );
                 
         if (adc.kg_val - adc.previous_kg_val) > 0.0015 {
             println!("--- START LISTENING --- {}", adc.kg_val - adc.previous_kg_val);
@@ -315,15 +348,15 @@ fn main() -> Result<(), Error> {
             if counter == 5{
                 if adc.kg_val.abs() > 0.001 {
                     println!("{:.3} added to customer", adc.kg_val);
+                    unsafe{
+                        kgval = (adc.kg_val*1000.0).abs();
+                        println!("{}", kgval);
+                    }
                     lcd.set_cursor_pos(40);
                     lcd.write_str("Hazelnuts:      ");
                     calc_status.set_label("Done.\n\nPress Confirm to continue or\nreturn the food to reset.");
                     confirm_btn.show();
-                    pack.begin();
-                    let un = format!("{}{}", "Almonds: \n", adc.kg_val );
                     
-                    let mut barX = frame::Frame::new(0, 0, 200, 90, "Almonds");
-                    pack.end();
                 }
                 else{
                     println!("Quantity returned");

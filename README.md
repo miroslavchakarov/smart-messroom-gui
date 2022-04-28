@@ -32,7 +32,7 @@ The near-future goals for the Smart Messroom are (TODO):
 
 
 The long-term goals for this system are the following:
- - Calibration funcion (tara) while program running. (Currently the calibration value is hard coded)
+ - Calibration funcion (tara) while program running. (Currently the calibration value is hard coded) and save settings.
  - (DONE!) Having a touch-friendly GUI on the 7-inch Touchscreen for the worker to operate with the device. (Currently testing the fltk-rs library.)
  - Having a payment system integrated, eventually with cryptocurrency or fiat currency.
 
