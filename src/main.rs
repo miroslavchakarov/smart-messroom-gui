@@ -1,3 +1,14 @@
+#[macro_use]
+extern crate serde_derive;
+extern crate preferences;
+extern crate app_dirs;
+use preferences::{AppInfo, PreferencesMap, Preferences, prefs_base_dir};
+use std::collections::HashMap;
+
+const APP_INFO: AppInfo = AppInfo{name: "Smart Messroom", author: "Miroslav Chakarov"};
+
+
+
 use fltk::{enums::{Align, Color, Font, FrameType}, prelude::*, *, };
 use fltk_theme::{widget_themes, WidgetTheme, ThemeType};
 use fltk_theme::{WidgetScheme, SchemeType};
@@ -13,7 +24,9 @@ use rppal::{spi::{Spi, Bus, SlaveSelect, Mode, Error},hal::Delay};
 use hx711_spi::Hx711;
 use nb::block;
 
-const ONE_KG_VALUE: f32 = 130670.0;
+use std::{thread, time};
+
+static mut ONE_KG_VALUE: f32 = 130670.0;
 const N: f32 = 30.0;
 const READ_LOOP_COUNT: u8 = 5;
 
@@ -25,6 +38,7 @@ const WIDTH: i32 = 1024;
 const HEIGHT: i32 = 768;
 
 static mut kgval : f32 = 0.0;
+static mut calib_flag: bool = false;
 
 struct Customer{
     id: u64,
@@ -46,6 +60,8 @@ struct AdcData{
     kg_val: f32,
     previous_kg_val: f32,
 }
+#[derive(Serialize, Deserialize, PartialEq, Debug)]
+struct SettingsData(f32);
 
 fn callback(app: app::App) {
     app.redraw();
@@ -63,8 +79,23 @@ fn add_product(product: String, quantity: u32){
 
 
 fn main() -> Result<(), Error> {
+    //let mut sets = PreferencesMap::new();
+    //sets.insert("onekg".into(),  1.5.to_string());
+    // let prefs_key = "Documents/rust-projects/smart-messroom-gui";
+    // //let save_result = sets.save(&APP_INFO, prefs_key);
+    // //assert!(save_result.is_ok());
 
-    let mut adc = AdcData{
+    // // Method `load` is from trait `Preferences`.
+    // let load_result: HashMap<String, f32> = PreferencesMap::load(&APP_INFO, prefs_key).unwrap();
+  
+
+    // let a: f32 = *load_result.get("onekg".into()).unwrap();
+    // print!("{}", &a);
+
+    // print!("{:?}", prefs_base_dir().unwrap());
+
+
+    let mut adc = AdcData {
         adc_raw_val: 0.0,
         adc_val : 0.0,
         zero_val: 0.0,
@@ -87,7 +118,9 @@ fn main() -> Result<(), Error> {
         new_customer_btn.hide();
     let mut calibration_btn = button::Button::new(60, 160, 200, 110, "Calibration")
         .below_of(&new_customer_btn, 10);
-        
+    let mut calib_label = frame::Frame::new(300, 170, 300, 40, "Put 1 kg. weight\nto calibrate.")
+        .below_of(&calibration_btn, 10);
+    calib_label.hide();    
     let mut product_label = frame::Frame::new(300, 170, 300, 40, "Hazelnuts");
         //.with_size(300, 40)
         //.below_of(&bar, 200);
@@ -204,7 +237,7 @@ fn main() -> Result<(), Error> {
         pack.begin();
         //let un = format!("{}", kgval).as_str();
 
-        let mut bar_x = frame::Frame::new(0, 0, 200, 40, "Almonds");
+        let mut bar_x = frame::Frame::new(0, 0, 200, 40, "Hazelnuts");
         bar_x.set_label_size(21);
         unsafe{
             let mut bar_y = frame::Frame::default()
@@ -220,22 +253,23 @@ fn main() -> Result<(), Error> {
     new_customer_btn.set_callback(move |_| {
        println!("New Customer pressed");
     });
+    //hx711 declarations
+    let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 1_000_000, Mode::Mode0)?;
+    let mut hx711 = Hx711::new(spi, Delay::new());
 
-    calibration_btn.set_callback(move |_| {
-        
-     });
+    //init the ADC
+    hx711.reset()?;
+    
 
     //app.run().unwrap();
     //done with GUI inits
     
     
 
-    //hx711 declarations
-    let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 1_000_000, Mode::Mode0)?;
-    let mut hx711 = Hx711::new(spi, Delay::new());
-    
-    //init the screen
-    hx711.reset()?;
+    calibration_btn.set_callback(move |_| {
+        unsafe{calib_flag = true;}
+        calib_label.show();
+    });
 
     //calibration (tara)
     for i in 0..N as i32 {
@@ -245,6 +279,10 @@ fn main() -> Result<(), Error> {
     }
     adc.zero_val /= N; //tara
     println!("Tara: {}", adc.zero_val);
+
+    
+
+    
 
     //screen declarations
     let rs = Pin::new(13);
@@ -302,6 +340,16 @@ fn main() -> Result<(), Error> {
     {
         adc.previous_kg_val = adc.kg_val;
         adc.adc_val = 0.0;
+        let prefs_key = "Documents/rust-projects/smart-messroom-gui";
+    
+    // Method `load` is from trait `Preferences`.
+        let load_result: HashMap<String, f32> = PreferencesMap::load(&APP_INFO, prefs_key).unwrap();
+        let a: f32 = *load_result.get("onekg".into()).unwrap();
+        
+        print!("{}", &a);
+
+        print!("{:?}", prefs_base_dir().unwrap());
+        unsafe{ONE_KG_VALUE = a;}
         
         for _ in 0..READ_LOOP_COUNT {
             adc.adc_raw_val = block!(hx711.read()).unwrap() as f32;
@@ -309,7 +357,7 @@ fn main() -> Result<(), Error> {
         }
         adc.adc_val /= READ_LOOP_COUNT as f32;
         adc.tara_val = adc.adc_val - adc.zero_val;
-        adc.kg_val = adc.tara_val / ONE_KG_VALUE;
+        unsafe{adc.kg_val = adc.tara_val / ONE_KG_VALUE;}
        
         println!(
             "Read: {} --- Tara val: {} --- kg: {:.3}", 
@@ -346,12 +394,24 @@ fn main() -> Result<(), Error> {
             lcd.write_str(&s);
             weight_lbl.set_label(&s);
             if counter == 5{
-                if adc.kg_val.abs() > 0.001 {
+                unsafe{if calib_flag == true{
+                    calc_status.set_label("Calibration done.\n\nContinue using the system\nas usual.");
+                    calib_flag = false;
+                   // &calib_label.hide();
+
+                    let mut sets = PreferencesMap::new();
+                    sets.insert("onekg".into(),  adc.tara_val.to_string());
+                    let prefs_key = "Documents/rust-projects/smart-messroom-gui";
+                    let save_result = sets.save(&APP_INFO, prefs_key);
+                    assert!(save_result.is_ok());
+                }
+                
+                else if adc.kg_val.abs() > 0.001 {
                     println!("{:.3} added to customer", adc.kg_val);
-                    unsafe{
+                    //unsafe{
                         kgval = (adc.kg_val*1000.0).abs();
                         println!("{}", kgval);
-                    }
+                    //}
                     lcd.set_cursor_pos(40);
                     lcd.write_str("Hazelnuts:      ");
                     calc_status.set_label("Done.\n\nPress Confirm to continue or\nreturn the food to reset.");
@@ -364,7 +424,7 @@ fn main() -> Result<(), Error> {
                     lcd.write_str("Returned      ");
                     calc_status.set_label("Food returned.\n\nContinue with another product\n or tap Pay to continue.");
                 }
-                
+                }
                 flag = false;
                 counter = 0;
             }
