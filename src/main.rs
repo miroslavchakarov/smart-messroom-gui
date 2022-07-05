@@ -109,7 +109,8 @@ fn main() -> Result<(), Error> {
     widget_scheme.apply();
     let mut win = window::Window::default()
         .with_size(WIDTH, HEIGHT)
-        .with_label("Smart Messroom");
+        .with_label("Smart Coffeteria");
+    
     let mut bar = frame::Frame::new(0, 0, WIDTH, 80, "  Customer #4")
         .with_align(Align::Left | Align::Inside);
     let mut new_customer_btn = button::Button::new(60, 80, 200, 110, "New customer")
@@ -118,9 +119,9 @@ fn main() -> Result<(), Error> {
         new_customer_btn.hide();
     let mut calibration_btn = button::Button::new(60, 160, 200, 110, "Calibration")
         .below_of(&new_customer_btn, 10);
-    let mut calib_label = frame::Frame::new(300, 170, 300, 40, "Put 1 kg. weight\nto calibrate.")
-        .below_of(&calibration_btn, 10);
-    calib_label.hide();    
+    let mut calib_label = frame::Frame::new(220, 170, 220, 40, "Put 1 kg. weight\nto calibrate.")
+        .below_of(&calibration_btn, 30);
+    //calib_label.hide();    
     let mut product_label = frame::Frame::new(300, 170, 300, 40, "Hazelnuts");
         //.with_size(300, 40)
         //.below_of(&bar, 200);
@@ -166,6 +167,40 @@ fn main() -> Result<(), Error> {
     win.end();
     win.make_resizable(true);
     win.show();
+
+    let mut payment_win = window::OverlayWindow::default()
+        .with_size(800, 530)
+        .center_of(&win)
+        .with_label("Payment - Smart Coffeteria");
+    // let mut progress = misc::Progress::new(200, 200, 300, 20, "Sending payment request...")
+    //     .set_value(100.0)
+    let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
+    pay_title_lbl.set_label_size(35);
+    pay_title_lbl.set_label_color(BLUE);
+    let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0 BGN")
+        .below_of(&pay_title_lbl, 50);
+    pay_amount_lbl.set_label_size(50);
+
+    let mut info_lbl = frame::Frame::new(0, 0, 800, 80, "Open your wallet app and scan the QR code on the tablet.
+                                                        Waiting for payment confirmation...")
+        .below_of(&pay_amount_lbl, 50);
+    info_lbl.set_label_size(22);
+    let mut close_pay_dial_btn = button::Button::new (450, 450, 300, 80, "Close")
+        .with_align(Align::Right);
+
+        close_pay_dial_btn.set_color(BLUE);
+        close_pay_dial_btn.set_selection_color(SEL_BLUE);
+        close_pay_dial_btn.set_label_color(Color::White);
+        close_pay_dial_btn.set_label_size(25);
+
+        
+    payment_win.end();
+    
+    close_pay_dial_btn.set_callback(move |_| {
+        
+        &payment_win.hide();
+        
+    });
     app::add_timeout(0.005, Box::new(move || {
         callback(app);
     }));
@@ -203,7 +238,7 @@ fn main() -> Result<(), Error> {
 
     weight_lbl.set_label_size(46);
     weight_lbl.set_label_color(GRAY);
-
+    calib_label.set_label_size(26);
     pay_btn.set_color(BLUE);
     pay_btn.set_selection_color(SEL_BLUE);
     pay_btn.set_label_color(Color::White);
@@ -229,7 +264,9 @@ fn main() -> Result<(), Error> {
 
     pay_btn.set_callback(move |_| {
         
-        println!("Button pressed");
+        println!("Pay pressed");
+        &payment_win.show();
+       
     });
     confirm_btn.set_callback(move |_| {
        
@@ -268,7 +305,7 @@ fn main() -> Result<(), Error> {
 
     calibration_btn.set_callback(move |_| {
         unsafe{calib_flag = true;}
-        calib_label.show();
+        calib_label.set_label("Put 1 kg. weight\nto calibrate.");
     });
 
     //calibration (tara)
@@ -324,7 +361,7 @@ fn main() -> Result<(), Error> {
     lcd.reset();
     lcd.clear();
     lcd.set_display_mode(true, false, false);
-    lcd.write_str("Smart Messroom");
+    lcd.write_str("Smart Coffeteria");
 
     lcd.set_cursor_pos(40);
     lcd.write_str("WELCOME!");
@@ -397,7 +434,7 @@ fn main() -> Result<(), Error> {
                 unsafe{if calib_flag == true{
                     calc_status.set_label("Calibration done.\n\nContinue using the system\nas usual.");
                     calib_flag = false;
-                   // &calib_label.hide();
+                    //calib_label.set_label("");
 
                     let mut sets = PreferencesMap::new();
                     sets.insert("onekg".into(),  adc.tara_val.to_string());
