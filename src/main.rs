@@ -27,6 +27,7 @@ use nb::block;
 use std::{thread, time};
 
 static mut ONE_KG_VALUE: f32 = 130670.0;
+const PRICE_PER_KG: f32 = 2.30;
 const N: f32 = 30.0;
 const READ_LOOP_COUNT: u8 = 5;
 
@@ -39,6 +40,7 @@ const HEIGHT: i32 = 768;
 
 static mut kgval : f32 = 0.0;
 static mut calib_flag: bool = false;
+static mut amount : f32 = 0.0;
 
 struct Customer{
     id: u64,
@@ -157,50 +159,23 @@ fn main() -> Result<(), Error> {
     let mut scrollbar = scroll.scrollbar();
         scrollbar.set_type(valuator::ScrollbarType::VerticalNice);
     let mut pack = group::Pack::default_fill();
-    pack.begin();
+    // pack.begin();
     
     
-    pack.end();
+    // pack.end();
     //scroll.scroll_to(0, 0);
+    
     scroll.end();
+
+
+
+
 
     win.end();
     win.make_resizable(true);
     win.show();
 
-    let mut payment_win = window::OverlayWindow::default()
-        .with_size(800, 530)
-        .center_of(&win)
-        .with_label("Payment - Smart Coffeteria");
-    // let mut progress = misc::Progress::new(200, 200, 300, 20, "Sending payment request...")
-    //     .set_value(100.0)
-    let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
-    pay_title_lbl.set_label_size(35);
-    pay_title_lbl.set_label_color(BLUE);
-    let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0 BGN")
-        .below_of(&pay_title_lbl, 50);
-    pay_amount_lbl.set_label_size(50);
-
-    let mut info_lbl = frame::Frame::new(0, 0, 800, 80, "Open your wallet app and scan the QR code on the tablet.
-                                                        Waiting for payment confirmation...")
-        .below_of(&pay_amount_lbl, 50);
-    info_lbl.set_label_size(22);
-    let mut close_pay_dial_btn = button::Button::new (450, 450, 300, 80, "Close")
-        .with_align(Align::Right);
-
-        close_pay_dial_btn.set_color(BLUE);
-        close_pay_dial_btn.set_selection_color(SEL_BLUE);
-        close_pay_dial_btn.set_label_color(Color::White);
-        close_pay_dial_btn.set_label_size(25);
-
-        
-    payment_win.end();
     
-    close_pay_dial_btn.set_callback(move |_| {
-        
-        &payment_win.hide();
-        
-    });
     app::add_timeout(0.005, Box::new(move || {
         callback(app);
     }));
@@ -262,31 +237,78 @@ fn main() -> Result<(), Error> {
     calibration_btn.set_label_color(Color::White);
     calibration_btn.set_label_size(25);
 
-    pay_btn.set_callback(move |_| {
-        
-        println!("Pay pressed");
-        &payment_win.show();
-       
-    });
+    
+
     confirm_btn.set_callback(move |_| {
        
         println!("Confirm pressed");
-        pack.begin();
-        //let un = format!("{}", kgval).as_str();
+        
 
         let mut bar_x = frame::Frame::new(0, 0, 200, 40, "Hazelnuts");
         bar_x.set_label_size(21);
+        pack.add(&bar_x);
         unsafe{
             let mut bar_y = frame::Frame::default()
                 .with_label(format!("{:.0} g.", (kgval)).as_str())
                 .with_size(200, 40);
-                bar_y.set_label_size(21);
-                    
+                bar_y.set_label_size(19);
+            let mut bar_p = frame::Frame::default()
+                .with_label(format!("{:.2} BGN\n_____________", (amount)).as_str())
+                .with_size(200, 30);  
+                bar_p.set_label_size(22);    
+                pack.add(&bar_y);
+                pack.add(&bar_p);
         }
-        pack.end();
-
+        
         
     });
+
+    pay_btn.set_callback(move |_| {
+        
+        //println!("Pay pressed");
+        let mut payment_win = window::Window::default()
+        .with_size(800, 530)
+        .center_of(&win)
+        .with_label("Payment - Smart Coffeteria");
+        
+        let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
+        pay_title_lbl.set_label_size(25);
+        pay_title_lbl.set_label_color(BLUE);
+        
+       
+       
+        let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.55 BGN")
+            .below_of(&pay_title_lbl, 30);
+        
+        unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
+        pay_amount_lbl.set_label_size(45);
+
+        let mut info_lbl = frame::Frame::new(0, 0, 800, 80, "Open your Averato wallet app and scan the QR code on the tablet.\nWaiting for payment confirmation...")
+            .below_of(&pay_amount_lbl, 10);
+        info_lbl.set_label_size(21);
+        let mut close_pay_dial_btn = button::Button::new(250, 430, 300, 80, "Close");
+        
+
+        close_pay_dial_btn.set_color(BLUE);
+        close_pay_dial_btn.set_selection_color(SEL_BLUE);
+        close_pay_dial_btn.set_label_color(Color::White);
+        close_pay_dial_btn.set_label_size(25);
+
+        
+
+        payment_win.end();
+        payment_win.make_resizable(true);
+    
+        payment_win.show();
+        close_pay_dial_btn.set_callback(move |_| {
+        
+            payment_win.hide();
+        });
+
+    
+        
+    });
+
     new_customer_btn.set_callback(move |_| {
        println!("New Customer pressed");
     });
@@ -308,6 +330,9 @@ fn main() -> Result<(), Error> {
         calib_label.set_label("Put 1 kg. weight\nto calibrate.");
     });
 
+
+    
+    
     //calibration (tara)
     for i in 0..N as i32 {
         let reading = block!(hx711.read()).unwrap() as f32;
@@ -447,6 +472,7 @@ fn main() -> Result<(), Error> {
                     println!("{:.3} added to customer", adc.kg_val);
                     //unsafe{
                         kgval = (adc.kg_val*1000.0).abs();
+                        amount = (adc.kg_val * PRICE_PER_KG).abs();
                         println!("{}", kgval);
                     //}
                     lcd.set_cursor_pos(40);
