@@ -26,6 +26,10 @@ use nb::block;
 
 use std::{thread, time};
 
+use futures::executor::block_on;
+use paho_mqtt as mqtt;
+use std::{env};
+
 static mut ONE_KG_VALUE: f32 = 130670.0;
 const PRICE_PER_KG: f32 = 2.30;
 const N: f32 = 30.0;
@@ -78,7 +82,51 @@ fn add_product(product: String, quantity: u32){
    // let mut bar4 = frame::Frame::new(0, 0, 200, 90, s);
 }
 
+fn connect_to_server(){
+    //connecting to server, mqtt
+    // Initialize the logger from the environment
+    env_logger::init();
 
+    // Let the user override the host, but note the "ssl://" protocol.
+    let host = env::args()
+        .nth(1)
+        .unwrap_or_else(|| "ssl://dev.mqtt.averato.com:8883".to_string());
+
+    println!("Connecting to host: '{}'", host);
+
+    // Run the client in an async block
+
+    if let Err(err) = block_on(async {
+        // Create a client & define connect options
+        let cli = mqtt::CreateOptionsBuilder::new()
+            .server_uri(&host)
+            .client_id("RaspberryPi")
+            .max_buffered_messages(100)
+            .create_client()?;
+
+        let conn_opts = mqtt::ConnectOptionsBuilder::new()
+            .ssl_options(mqtt::SslOptions::new())
+            .user_name("blackseachain_demo_rpi")
+            .password("82bfcb87384180045b102c1261bebd")
+            .finalize();
+
+        cli.connect(conn_opts).await?;
+
+        let msg = mqtt::MessageBuilder::new()
+            .topic("blackseachain-demo-vnd/rpi/vpos-client/msg")
+            .payload("0.49&BGN")
+            .qos(1)
+            .finalize();
+
+        cli.publish(msg).await?;
+        cli.disconnect(None).await?;
+
+        Ok::<(), mqtt::Error>(())
+    }) {
+        eprintln!("{}", err);
+    }
+    
+}
 
 fn main() -> Result<(), Error> {
     //let mut sets = PreferencesMap::new();
@@ -277,7 +325,7 @@ fn main() -> Result<(), Error> {
         
        
        
-        let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.55 BGN")
+        let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.00 BGN")
             .below_of(&pay_title_lbl, 30);
         
         unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
@@ -297,7 +345,7 @@ fn main() -> Result<(), Error> {
         
 
         payment_win.end();
-        payment_win.make_resizable(true);
+        //payment_win.make_resizable(true);
     
         payment_win.show();
         close_pay_dial_btn.set_callback(move |_| {
@@ -343,7 +391,7 @@ fn main() -> Result<(), Error> {
     println!("Tara: {}", adc.zero_val);
 
     
-
+    connect_to_server();
     
 
     //screen declarations
@@ -397,7 +445,10 @@ fn main() -> Result<(), Error> {
     let mut counter: u8 = 0;
     let mut flag: bool = false;
     
+
     
+    
+
     while app.wait()
     {
         adc.previous_kg_val = adc.kg_val;
