@@ -106,8 +106,8 @@ fn connect_to_server(){
 
         let conn_opts = mqtt::ConnectOptionsBuilder::new()
             .ssl_options(mqtt::SslOptions::new())
-            .user_name("blackseachain_demo_rpi")
-            .password("82bfcb87384180045b102c1261bebd")
+            .user_name("us")
+            .password("...")
             .finalize();
 
         cli.connect(conn_opts).await?;
