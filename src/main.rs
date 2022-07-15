@@ -1,7 +1,17 @@
-#[macro_use]
-extern crate serde_derive;
-extern crate preferences;
-extern crate app_dirs;
+use ntex::connect::openssl::Connector;
+use ntex::time::{sleep, Millis, Seconds};
+use ntex_mqtt::v5;
+use openssl::ssl;
+use ntex::util::ByteString;
+use ntex::util::Bytes;
+
+extern crate byte_string;
+
+
+
+use serde_derive;
+use preferences;
+use app_dirs;
 use preferences::{AppInfo, PreferencesMap, Preferences, prefs_base_dir};
 use std::collections::HashMap;
 
@@ -10,7 +20,7 @@ const APP_INFO: AppInfo = AppInfo{name: "Smart Messroom", author: "Miroslav Chak
 
 
 use fltk::{enums::{Align, Color, Font, FrameType}, prelude::*, *, };
-use fltk_theme::{widget_themes, WidgetTheme, ThemeType};
+
 use fltk_theme::{WidgetScheme, SchemeType};
 
 //use std::{thread, time};
@@ -26,9 +36,7 @@ use nb::block;
 
 use std::{thread, time};
 
-use futures::executor::block_on;
-use paho_mqtt as mqtt;
-use std::{env};
+
 
 static mut ONE_KG_VALUE: f32 = 130670.0;
 const PRICE_PER_KG: f32 = 2.30;
@@ -45,6 +53,27 @@ const HEIGHT: i32 = 768;
 static mut kgval : f32 = 0.0;
 static mut calib_flag: bool = false;
 static mut amount : f32 = 0.0;
+
+#[derive(Debug)]
+struct Errorr;
+
+impl std::convert::TryFrom<Errorr> for v5::PublishAck {
+    type Error = Errorr;
+
+    fn try_from(err: Errorr) -> Result<Self, Self::Error> {
+        Err(err)
+    }
+}
+
+async fn publish(pkt: v5::Publish) -> Result<v5::PublishAck, Errorr> {
+    log::info!(
+        "incoming publish: {:?} -> {:?} payload {:?}",
+        pkt.id(),
+        pkt.topic(),
+        pkt.payload()
+    );
+    Ok(pkt.ack())
+}
 
 struct Customer{
     id: u64,
@@ -66,12 +95,11 @@ struct AdcData{
     kg_val: f32,
     previous_kg_val: f32,
 }
-#[derive(Serialize, Deserialize, PartialEq, Debug)]
-struct SettingsData(f32);
+
 
 fn callback(app: app::App) {
     app.redraw();
-    app::repeat_timeout(0.005, Box::new(move || {
+    app::repeat_timeout(0.05, Box::new(move || {
         callback(app);
     }));
 }
@@ -82,69 +110,51 @@ fn add_product(product: String, quantity: u32){
    // let mut bar4 = frame::Frame::new(0, 0, 200, 90, s);
 }
 
-fn connect_to_server(){
-    //connecting to server, mqtt
-    // Initialize the logger from the environment
+
+
+#[ntex::main]
+async fn main() -> Result<(), Error> {
+    
+    //mqtt connection first
+    std::env::set_var("RUST_LOG", "openssl_client=trace,ntex=info,ntex_mqtt=trace");
     env_logger::init();
 
-    // Let the user override the host, but note the "ssl://" protocol.
-    let host = env::args()
-        .nth(1)
-        .unwrap_or_else(|| "ssl://dev.mqtt.averato.com:8883".to_string());
+    // ssl connector
+    let mut builder = ssl::SslConnector::builder(ssl::SslMethod::tls()).unwrap();
+    builder.set_verify(ssl::SslVerifyMode::NONE);
 
-    println!("Connecting to host: '{}'", host);
 
-    // Run the client in an async block
+    let username = ByteString::from("aa");
+    let password = Bytes::from(&"aa"[..]);
 
-    if let Err(err) = block_on(async {
-        // Create a client & define connect options
-        let cli = mqtt::CreateOptionsBuilder::new()
-            .server_uri(&host)
-            .client_id("RaspberryPi")
-            .max_buffered_messages(100)
-            .create_client()?;
+    let client = v5::client::MqttConnector::new("dev.mqtt.averato.com:8883")
+        .connector(Connector::new(builder.build()))
+        .client_id("raspberry")
+        .username(username)
+        .password(password)
+        .keep_alive(Seconds::ONE)
+        .max_packet_size(30)
+        .connect()
+        .await
+        .unwrap();
 
-        let conn_opts = mqtt::ConnectOptionsBuilder::new()
-            .ssl_options(mqtt::SslOptions::new())
-            .user_name("us")
-            .password("...")
-            .finalize();
+    let sink = client.sink();
 
-        cli.connect(conn_opts).await?;
+    let router = client.resource("dev.mqtt.averato.com:8883", publish);
+    ntex::rt::spawn(router.start_default());
 
-        let msg = mqtt::MessageBuilder::new()
-            .topic("blackseachain-demo-vnd/rpi/vpos-client/msg")
-            .payload("0.49&BGN")
-            .qos(1)
-            .finalize();
+    sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "0.59&BGN".into()).send_at_least_once().await.unwrap();
 
-        cli.publish(msg).await?;
-        cli.disconnect(None).await?;
+    sleep(Millis(10_000)).await;
 
-        Ok::<(), mqtt::Error>(())
-    }) {
-        eprintln!("{}", err);
-    }
+    log::info!("closing connection");
+    //sink.close();
+    sleep(Millis(1_000)).await;
+   
+    //end mqtt
     
-}
-
-fn main() -> Result<(), Error> {
-    //let mut sets = PreferencesMap::new();
-    //sets.insert("onekg".into(),  1.5.to_string());
-    // let prefs_key = "Documents/rust-projects/smart-messroom-gui";
-    // //let save_result = sets.save(&APP_INFO, prefs_key);
-    // //assert!(save_result.is_ok());
-
-    // // Method `load` is from trait `Preferences`.
-    // let load_result: HashMap<String, f32> = PreferencesMap::load(&APP_INFO, prefs_key).unwrap();
-  
-
-    // let a: f32 = *load_result.get("onekg".into()).unwrap();
-    // print!("{}", &a);
-
-    // print!("{:?}", prefs_base_dir().unwrap());
-
-
+    
+    
     let mut adc = AdcData {
         adc_raw_val: 0.0,
         adc_val : 0.0,
@@ -159,7 +169,7 @@ fn main() -> Result<(), Error> {
     widget_scheme.apply();
     let mut win = window::Window::default()
         .with_size(WIDTH, HEIGHT)
-        .with_label("Smart Coffeteria");
+        .with_label("Smart Cafeteria");
     
     let mut bar = frame::Frame::new(0, 0, WIDTH, 80, "  Customer #4")
         .with_align(Align::Left | Align::Inside);
@@ -224,7 +234,7 @@ fn main() -> Result<(), Error> {
     win.show();
 
     
-    app::add_timeout(0.005, Box::new(move || {
+    app::add_timeout(0.05, Box::new(move || {
         callback(app);
     }));
 
@@ -261,7 +271,7 @@ fn main() -> Result<(), Error> {
 
     weight_lbl.set_label_size(46);
     weight_lbl.set_label_color(GRAY);
-    calib_label.set_label_size(26);
+    calib_label.set_label_size(15);
     pay_btn.set_color(BLUE);
     pay_btn.set_selection_color(SEL_BLUE);
     pay_btn.set_label_color(Color::White);
@@ -313,23 +323,27 @@ fn main() -> Result<(), Error> {
 
     pay_btn.set_callback(move |_| {
         
-        //println!("Pay pressed");
+    
+            //println!("Pay pressed");
         let mut payment_win = window::Window::default()
         .with_size(800, 530)
         .center_of(&win)
-        .with_label("Payment - Smart Coffeteria");
+        .with_label("Payment - Smart Cafeteria");
         
         let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
         pay_title_lbl.set_label_size(25);
         pay_title_lbl.set_label_color(BLUE);
         
-       
-       
+    
+    
         let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.00 BGN")
             .below_of(&pay_title_lbl, 30);
         
         unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
         pay_amount_lbl.set_label_size(45);
+
+
+
 
         let mut info_lbl = frame::Frame::new(0, 0, 800, 80, "Open your Averato wallet app and scan the QR code on the tablet.\nWaiting for payment confirmation...")
             .below_of(&pay_amount_lbl, 10);
@@ -342,6 +356,12 @@ fn main() -> Result<(), Error> {
         close_pay_dial_btn.set_label_color(Color::White);
         close_pay_dial_btn.set_label_size(25);
 
+        unsafe{
+            async {
+                sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{}&BGN", amount).into()).send_at_least_once().await.unwrap();
+            
+            };
+        }
         
 
         payment_win.end();
@@ -352,6 +372,8 @@ fn main() -> Result<(), Error> {
         
             payment_win.hide();
         });
+       
+       
 
     
         
@@ -391,7 +413,7 @@ fn main() -> Result<(), Error> {
     println!("Tara: {}", adc.zero_val);
 
     
-    connect_to_server();
+    
     
 
     //screen declarations
@@ -434,7 +456,7 @@ fn main() -> Result<(), Error> {
     lcd.reset();
     lcd.clear();
     lcd.set_display_mode(true, false, false);
-    lcd.write_str("Smart Coffeteria");
+    lcd.write_str("Smart Cafeteria");
 
     lcd.set_cursor_pos(40);
     lcd.write_str("WELCOME!");
@@ -448,7 +470,8 @@ fn main() -> Result<(), Error> {
 
     
     
-
+    
+   
     while app.wait()
     {
         adc.previous_kg_val = adc.kg_val;
@@ -459,9 +482,9 @@ fn main() -> Result<(), Error> {
         let load_result: HashMap<String, f32> = PreferencesMap::load(&APP_INFO, prefs_key).unwrap();
         let a: f32 = *load_result.get("onekg".into()).unwrap();
         
-        print!("{}", &a);
+        //print!("{}", &a);
 
-        print!("{:?}", prefs_base_dir().unwrap());
+        //print!("{:?}", prefs_base_dir().unwrap());
         unsafe{ONE_KG_VALUE = a;}
         
         for _ in 0..READ_LOOP_COUNT {
@@ -543,8 +566,10 @@ fn main() -> Result<(), Error> {
                 counter = 0;
             }
         }
-        //thread::sleep(time::Duration::from_millis(50));   
+        //thread::sleep(time::Duration::from_millis(50));  
+         
     }   
+    
     Ok(()) 
 }
     
