@@ -5,7 +5,14 @@ use openssl::ssl;
 use ntex::util::ByteString;
 use ntex::util::Bytes;
 
+use async_std::task;
+
+use std::thread::spawn;
 extern crate byte_string;
+
+use tokio;
+use tokio::runtime::Runtime;
+use tokio::runtime::Builder;
 
 
 
@@ -23,6 +30,7 @@ use fltk::{enums::{Align, Color, Font, FrameType}, prelude::*, *, };
 
 use fltk_theme::{WidgetScheme, SchemeType};
 
+use fltk_evented::AsyncListener;
 //use std::{thread, time};
 
 use linux_embedded_hal::Pin;
@@ -112,9 +120,22 @@ fn add_product(product: String, quantity: u32){
 
 
 
-#[ntex::main]
+#[tokio::main]
 async fn main() -> Result<(), Error> {
     
+    // self.handle.spawn(async move {
+
+        
+    // });
+    // let rt  = Runtime::new()?;
+
+    // // Spawn the root task
+    // rt.block_on(async {
+    
+    
+    
+        
+    // });
     //mqtt connection first
     std::env::set_var("RUST_LOG", "openssl_client=trace,ntex=info,ntex_mqtt=trace");
     env_logger::init();
@@ -137,21 +158,20 @@ async fn main() -> Result<(), Error> {
         .connect()
         .await
         .unwrap();
-
+    
     let sink = client.sink();
 
     let router = client.resource("dev.mqtt.averato.com:8883", publish);
     ntex::rt::spawn(router.start_default());
 
-    sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "0.59&BGN".into()).send_at_least_once().await.unwrap();
+    sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "CONNECTED".into()).send_at_least_once().await.unwrap();
 
     sleep(Millis(10_000)).await;
 
     log::info!("closing connection");
     //sink.close();
     sleep(Millis(1_000)).await;
-   
-    //end mqtt
+    
     
     
     
@@ -191,7 +211,7 @@ async fn main() -> Result<(), Error> {
     let mut calc_status = frame::Frame::default()
         .with_size(300, 60)
         .below_of(&product_label, 90)
-       // .with_align(Align::Center)
+    // .with_align(Align::Center)
         .with_label("");
     let mut weight_lbl = frame::Frame::default()
         .with_size(350, 60)
@@ -200,13 +220,16 @@ async fn main() -> Result<(), Error> {
         //.with_align(Align::Center)
         .with_label("--- g.");
     let mut confirm_btn = button::Button::new(350, HEIGHT - 120, 180, 80, "Confirm");
-       // .below_of(&weight_lbl, 30);
+    // .below_of(&weight_lbl, 30);
         confirm_btn.hide();
     let mut products_bar = frame::Frame::new(WIDTH - 250, 90, 200, 90, "Products added:")
         .with_align(Align::Right | Align::Inside);
-    let mut pay_btn = button::Button::new(WIDTH - 230, HEIGHT - 120, 220, 110, "Pay"); //@+6plus
+    //let mut pay_btn = button::Button::new(WIDTH - 230, HEIGHT - 120, 220, 110, "Pay"); //@+6plus
     //let mut spin = Progress::new(0,0,0);
-
+    let mut pay_btn: AsyncListener<_> = button::Button::default()
+    .with_label("Pay")
+    .with_size(220, 110)
+    .into();
     // let mut scroll = group::Scroll::new(WIDTH - 240, 30, 250, HEIGHT-150, "Products taken")
     //     .with_type(group::ScrollType::Vertical)
     //     .below_of(&products_bar, 10);
@@ -231,8 +254,8 @@ async fn main() -> Result<(), Error> {
 
     win.end();
     win.make_resizable(true);
+    
     win.show();
-
     
     app::add_timeout(0.05, Box::new(move || {
         callback(app);
@@ -251,7 +274,7 @@ async fn main() -> Result<(), Error> {
         draw::draw_rectf(0, b.height(), b.width(), 1);
     });
 
-   
+
     
     
 
@@ -276,8 +299,8 @@ async fn main() -> Result<(), Error> {
     pay_btn.set_selection_color(SEL_BLUE);
     pay_btn.set_label_color(Color::White);
     pay_btn.set_label_size(35);
-   // pay_btn.set_frame(FrameType::GtkUpBox);
-  
+    // pay_btn.set_frame(FrameType::GtkUpBox);
+
     confirm_btn.set_color(BLUE);
     confirm_btn.set_selection_color(SEL_BLUE);
     confirm_btn.set_label_color(Color::White);
@@ -298,7 +321,7 @@ async fn main() -> Result<(), Error> {
     
 
     confirm_btn.set_callback(move |_| {
-       
+    
         println!("Confirm pressed");
         
 
@@ -321,66 +344,15 @@ async fn main() -> Result<(), Error> {
         
     });
 
-    pay_btn.set_callback(move |_| {
-        
-    
-            //println!("Pay pressed");
-        let mut payment_win = window::Window::default()
-        .with_size(800, 530)
-        .center_of(&win)
-        .with_label("Payment - Smart Cafeteria");
-        
-        let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
-        pay_title_lbl.set_label_size(25);
-        pay_title_lbl.set_label_color(BLUE);
-        
     
     
-        let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.00 BGN")
-            .below_of(&pay_title_lbl, 30);
         
-        unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
-        pay_amount_lbl.set_label_size(45);
-
-
-
-
-        let mut info_lbl = frame::Frame::new(0, 0, 800, 80, "Open your Averato wallet app and scan the QR code on the tablet.\nWaiting for payment confirmation...")
-            .below_of(&pay_amount_lbl, 10);
-        info_lbl.set_label_size(21);
-        let mut close_pay_dial_btn = button::Button::new(250, 430, 300, 80, "Close");
-        
-
-        close_pay_dial_btn.set_color(BLUE);
-        close_pay_dial_btn.set_selection_color(SEL_BLUE);
-        close_pay_dial_btn.set_label_color(Color::White);
-        close_pay_dial_btn.set_label_size(25);
-
-        unsafe{
-            async {
-                sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{}&BGN", amount).into()).send_at_least_once().await.unwrap();
-            
-            };
-        }
-        
-
-        payment_win.end();
-        //payment_win.make_resizable(true);
-    
-        payment_win.show();
-        close_pay_dial_btn.set_callback(move |_| {
-        
-            payment_win.hide();
-        });
-       
-       
-
     
         
-    });
+    
 
     new_customer_btn.set_callback(move |_| {
-       println!("New Customer pressed");
+    println!("New Customer pressed");
     });
     //hx711 declarations
     let spi = Spi::new(Bus::Spi0, SlaveSelect::Ss0, 1_000_000, Mode::Mode0)?;
@@ -466,19 +438,17 @@ async fn main() -> Result<(), Error> {
     
     let mut counter: u8 = 0;
     let mut flag: bool = false;
-    
 
-    
-    
-    
-   
+
+
+
     while app.wait()
     {
         adc.previous_kg_val = adc.kg_val;
         adc.adc_val = 0.0;
         let prefs_key = "Documents/rust-projects/smart-messroom-gui";
     
-    // Method `load` is from trait `Preferences`.
+        // Method `load` is from trait `Preferences`.
         let load_result: HashMap<String, f32> = PreferencesMap::load(&APP_INFO, prefs_key).unwrap();
         let a: f32 = *load_result.get("onekg".into()).unwrap();
         
@@ -494,13 +464,69 @@ async fn main() -> Result<(), Error> {
         adc.adc_val /= READ_LOOP_COUNT as f32;
         adc.tara_val = adc.adc_val - adc.zero_val;
         unsafe{adc.kg_val = adc.tara_val / ONE_KG_VALUE;}
-       
+    
         println!(
             "Read: {} --- Tara val: {} --- kg: {:.3}", 
             adc.adc_val as i32, 
             adc.tara_val as i32, 
             adc.kg_val
-            );
+        );
+
+        if pay_btn.triggered().await {
+
+            println!("Pay pressed");
+            let mut payment_win = window::Window::default()
+            .with_size(800, 530)
+            //.center_of(&win)
+            .with_label("Payment - Smart Cafeteria");
+            
+            let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
+            pay_title_lbl.set_label_size(25);
+            pay_title_lbl.set_label_color(BLUE);
+            
+        
+        
+            let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.00 BGN")
+                .below_of(&pay_title_lbl, 30);
+            
+            unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
+            pay_amount_lbl.set_label_size(45);
+    
+    
+    
+    
+            let mut info_lbl = frame::Frame::new(0, 0, 800, 80, 
+                "Open your Averato wallet app and scan the QR code on the tablet.\nWaiting for payment confirmation...")
+                .below_of(&pay_amount_lbl, 10);
+            info_lbl.set_label_size(21);
+            let mut close_pay_dial_btn = button::Button::new(250, 430, 300, 80, "Close");
+            
+    
+            close_pay_dial_btn.set_color(BLUE);
+            close_pay_dial_btn.set_selection_color(SEL_BLUE);
+            close_pay_dial_btn.set_label_color(Color::White);
+            close_pay_dial_btn.set_label_size(25);
+    
+    
+            
+            //let sinkc = sink.clone();
+            //ntex::rt::spawn( async move {
+            
+            unsafe{
+                sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{}&BGN", amount).into()).send_at_least_once().await.unwrap();
+            }
+            
+            
+    
+            payment_win.end();
+            //payment_win.make_resizable(true);
+        
+            payment_win.show();
+            close_pay_dial_btn.set_callback(move |_| {
+            
+                payment_win.hide();
+            });
+        }
                 
         if (adc.kg_val - adc.previous_kg_val) > 0.0015 {
             println!("--- START LISTENING --- {}", adc.kg_val - adc.previous_kg_val);
@@ -567,10 +593,18 @@ async fn main() -> Result<(), Error> {
             }
         }
         //thread::sleep(time::Duration::from_millis(50));  
-         
-    }   
+        
+    }  
+
     
     Ok(()) 
+    
+    
+    
+   
+    
+    
+    
 }
     
 
