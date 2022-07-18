@@ -120,7 +120,7 @@ fn add_product(product: String, quantity: u32){
 
 
 
-#[tokio::main]
+#[ntex::main]
 async fn main() -> Result<(), Error> {
     
     // self.handle.spawn(async move {
@@ -137,40 +137,40 @@ async fn main() -> Result<(), Error> {
         
     // });
     //mqtt connection first
-    // std::env::set_var("RUST_LOG", "openssl_client=trace,ntex=info,ntex_mqtt=trace");
-    // env_logger::init();
+    std::env::set_var("RUST_LOG", "openssl_client=trace,ntex=info,ntex_mqtt=trace");
+    env_logger::init();
 
-    // // ssl connector
-    // let mut builder = ssl::SslConnector::builder(ssl::SslMethod::tls()).unwrap();
-    // builder.set_verify(ssl::SslVerifyMode::NONE);
+    // ssl connector
+    let mut builder = ssl::SslConnector::builder(ssl::SslMethod::tls()).unwrap();
+    builder.set_verify(ssl::SslVerifyMode::NONE);
 
 
-    // let username = ByteString::from("aa");
-    // let password = Bytes::from(&"aa"[..]);
+    let username = ByteString::from("aa");
+    let password = Bytes::from(&"aa"[..]);
 
-    // let client = v5::client::MqttConnector::new("dev.mqtt.averato.com:8883")
-    //     .connector(Connector::new(builder.build()))
-    //     .client_id("raspberry")
-    //     .username(username)
-    //     .password(password)
-    //     .keep_alive(Seconds::ONE)
-    //     .max_packet_size(30)
-    //     .connect()
-    //     .await
-    //     .unwrap();
+    let client = v5::client::MqttConnector::new("dev.mqtt.averato.com:8883")
+        .connector(Connector::new(builder.build()))
+        .client_id("raspberry")
+        .username(username)
+        .password(password)
+        .keep_alive(Seconds::ONE)
+        .max_packet_size(30)
+        .connect()
+        .await
+        .unwrap();
     
-    // let sink = client.sink();
+    let sink = client.sink();
 
-    // let router = client.resource("dev.mqtt.averato.com:8883", publish);
-    // ntex::rt::spawn(router.start_default());
+    let router = client.resource("dev.mqtt.averato.com:8883", publish);
+    ntex::rt::spawn(router.start_default());
 
-    // sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "CONNECTED".into()).send_at_least_once().await.unwrap();
+    sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "CONNECTED".into()).send_at_least_once().await.unwrap();
 
-    // sleep(Millis(10_000)).await;
+    sleep(Millis(10_000)).await;
 
-    // log::info!("closing connection");
-    // //sink.close();
-    // sleep(Millis(1_000)).await;
+    log::info!("closing connection");
+    //sink.close();
+    sleep(Millis(1_000)).await;
     
     
     
@@ -226,9 +226,10 @@ async fn main() -> Result<(), Error> {
         .with_align(Align::Right | Align::Inside);
     //let mut pay_btn = button::Button::new(WIDTH - 230, HEIGHT - 120, 220, 110, "Pay"); //@+6plus
     //let mut spin = Progress::new(0,0,0);
-    let mut pay_btn: AsyncListener<_> = button::Button::default()
-    .with_label("Pay")
-    .with_size(220, 110)
+    let mut pay_btn: AsyncListener<_> = button::Button::new(WIDTH - 230, HEIGHT - 120, 220, 110, "Pay")
+    // .with_label("Pay")
+    // .with_size(220, 110)
+   
     .into();
 
 
@@ -319,6 +320,76 @@ async fn main() -> Result<(), Error> {
     calibration_btn.set_selection_color(SEL_BLUE);
     calibration_btn.set_label_color(Color::White);
     calibration_btn.set_label_size(25);
+
+    if pay_btn.triggered().await{
+        let mut payment_win = window::Window::default()
+        .with_size(800, 530)
+        //.center_of(&win)
+        .with_label("Payment - Smart Cafeteria");
+        
+        let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
+        pay_title_lbl.set_label_size(25);
+        pay_title_lbl.set_label_color(BLUE);
+        
+    
+    
+        let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.00 BGN")
+            .below_of(&pay_title_lbl, 30);
+        
+        unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
+        pay_amount_lbl.set_label_size(45);
+
+
+
+
+        let mut info_lbl = frame::Frame::new(0, 0, 800, 80, 
+            "Open your Averato wallet app and scan the QR code on the tablet.\nWaiting for payment confirmation...")
+            .below_of(&pay_amount_lbl, 10);
+        info_lbl.set_label_size(21);
+        let mut close_pay_dial_btn = button::Button::new(250, 430, 300, 80, "Close");
+        
+
+        close_pay_dial_btn.set_color(BLUE);
+        close_pay_dial_btn.set_selection_color(SEL_BLUE);
+        close_pay_dial_btn.set_label_color(Color::White);
+        close_pay_dial_btn.set_label_size(25);
+
+
+        
+        //let sinkc = sink.clone();
+        //ntex::rt::spawn( async move {
+        
+        unsafe{
+            sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{}&BGN", amount).into()).send_at_least_once().await.unwrap();
+        }
+        
+        
+
+        payment_win.end();
+        //payment_win.make_resizable(true);
+    
+        payment_win.show();
+        close_pay_dial_btn.set_callback(move |_| {
+        
+            payment_win.hide();
+        });
+
+    }
+    pay_btn.handle(|b, ev| match ev{
+        enums::Event::Enter => {
+            println!("Pay pressedddd");
+            true
+        }
+        enums::Event::Push => {
+            println!("Pay pushed");
+
+
+            println!("Pay pressed");
+            
+            true
+        }
+        _ => false
+    });
 
     
 
@@ -446,6 +517,10 @@ async fn main() -> Result<(), Error> {
 
     while app.wait()
     {
+        if pay_btn.triggered().await {
+            println! ("Activated inside program");
+            
+        }
         adc.previous_kg_val = adc.kg_val;
         adc.adc_val = 0.0;
         let prefs_key = "Documents/rust-projects/smart-messroom-gui";
@@ -474,61 +549,7 @@ async fn main() -> Result<(), Error> {
             adc.kg_val
         );
 
-        if pay_btn.triggered().await {
-
-            println!("Pay pressed");
-            let mut payment_win = window::Window::default()
-            .with_size(800, 530)
-            //.center_of(&win)
-            .with_label("Payment - Smart Cafeteria");
-            
-            let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
-            pay_title_lbl.set_label_size(25);
-            pay_title_lbl.set_label_color(BLUE);
-            
         
-        
-            let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.00 BGN")
-                .below_of(&pay_title_lbl, 30);
-            
-            unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
-            pay_amount_lbl.set_label_size(45);
-    
-    
-    
-    
-            let mut info_lbl = frame::Frame::new(0, 0, 800, 80, 
-                "Open your Averato wallet app and scan the QR code on the tablet.\nWaiting for payment confirmation...")
-                .below_of(&pay_amount_lbl, 10);
-            info_lbl.set_label_size(21);
-            let mut close_pay_dial_btn = button::Button::new(250, 430, 300, 80, "Close");
-            
-    
-            close_pay_dial_btn.set_color(BLUE);
-            close_pay_dial_btn.set_selection_color(SEL_BLUE);
-            close_pay_dial_btn.set_label_color(Color::White);
-            close_pay_dial_btn.set_label_size(25);
-    
-    
-            
-            //let sinkc = sink.clone();
-            //ntex::rt::spawn( async move {
-            
-            // unsafe{
-            //     sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{}&BGN", amount).into()).send_at_least_once().await.unwrap();
-            // }
-            
-            
-    
-            payment_win.end();
-            //payment_win.make_resizable(true);
-        
-            payment_win.show();
-            close_pay_dial_btn.set_callback(move |_| {
-            
-                payment_win.hide();
-            });
-        }
                 
         if (adc.kg_val - adc.previous_kg_val) > 0.0015 {
             println!("--- START LISTENING --- {}", adc.kg_val - adc.previous_kg_val);
