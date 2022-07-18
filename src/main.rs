@@ -5,14 +5,14 @@ use openssl::ssl;
 use ntex::util::ByteString;
 use ntex::util::Bytes;
 
-use async_std::task;
+//use async_std::task;
 
-use std::thread::spawn;
+//use std::thread::spawn;
 extern crate byte_string;
 
 use tokio;
-use tokio::runtime::Runtime;
-use tokio::runtime::Builder;
+//use tokio::runtime::Runtime;
+//use tokio::runtime::Builder;
 
 
 
@@ -137,40 +137,40 @@ async fn main() -> Result<(), Error> {
         
     // });
     //mqtt connection first
-    std::env::set_var("RUST_LOG", "openssl_client=trace,ntex=info,ntex_mqtt=trace");
-    env_logger::init();
+    // std::env::set_var("RUST_LOG", "openssl_client=trace,ntex=info,ntex_mqtt=trace");
+    // env_logger::init();
 
-    // ssl connector
-    let mut builder = ssl::SslConnector::builder(ssl::SslMethod::tls()).unwrap();
-    builder.set_verify(ssl::SslVerifyMode::NONE);
+    // // ssl connector
+    // let mut builder = ssl::SslConnector::builder(ssl::SslMethod::tls()).unwrap();
+    // builder.set_verify(ssl::SslVerifyMode::NONE);
 
 
-    let username = ByteString::from("aa");
-    let password = Bytes::from(&"aa"[..]);
+    // let username = ByteString::from("aa");
+    // let password = Bytes::from(&"aa"[..]);
 
-    let client = v5::client::MqttConnector::new("dev.mqtt.averato.com:8883")
-        .connector(Connector::new(builder.build()))
-        .client_id("raspberry")
-        .username(username)
-        .password(password)
-        .keep_alive(Seconds::ONE)
-        .max_packet_size(30)
-        .connect()
-        .await
-        .unwrap();
+    // let client = v5::client::MqttConnector::new("dev.mqtt.averato.com:8883")
+    //     .connector(Connector::new(builder.build()))
+    //     .client_id("raspberry")
+    //     .username(username)
+    //     .password(password)
+    //     .keep_alive(Seconds::ONE)
+    //     .max_packet_size(30)
+    //     .connect()
+    //     .await
+    //     .unwrap();
     
-    let sink = client.sink();
+    // let sink = client.sink();
 
-    let router = client.resource("dev.mqtt.averato.com:8883", publish);
-    ntex::rt::spawn(router.start_default());
+    // let router = client.resource("dev.mqtt.averato.com:8883", publish);
+    // ntex::rt::spawn(router.start_default());
 
-    sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "CONNECTED".into()).send_at_least_once().await.unwrap();
+    // sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "CONNECTED".into()).send_at_least_once().await.unwrap();
 
-    sleep(Millis(10_000)).await;
+    // sleep(Millis(10_000)).await;
 
-    log::info!("closing connection");
-    //sink.close();
-    sleep(Millis(1_000)).await;
+    // log::info!("closing connection");
+    // //sink.close();
+    // sleep(Millis(1_000)).await;
     
     
     
@@ -230,6 +230,8 @@ async fn main() -> Result<(), Error> {
     .with_label("Pay")
     .with_size(220, 110)
     .into();
+
+
     // let mut scroll = group::Scroll::new(WIDTH - 240, 30, 250, HEIGHT-150, "Products taken")
     //     .with_type(group::ScrollType::Vertical)
     //     .below_of(&products_bar, 10);
@@ -512,9 +514,9 @@ async fn main() -> Result<(), Error> {
             //let sinkc = sink.clone();
             //ntex::rt::spawn( async move {
             
-            unsafe{
-                sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{}&BGN", amount).into()).send_at_least_once().await.unwrap();
-            }
+            // unsafe{
+            //     sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{}&BGN", amount).into()).send_at_least_once().await.unwrap();
+            // }
             
             
     
