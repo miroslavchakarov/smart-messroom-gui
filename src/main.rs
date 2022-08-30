@@ -140,8 +140,8 @@ async fn main() -> Result<(), Error> {
     //mqtt connection first
 
 
-    let username = ByteString::from("blackseachain_demo_rpi");
-    let password = Bytes::from(&"82bfcb87384180045b102c1261bebd"[..]);
+    let username = ByteString::from("aa");
+    let password = Bytes::from(&"aa"[..]);
 
     // ssl connector
     let mut builder = ssl::SslConnector::builder(ssl::SslMethod::tls()).unwrap();
