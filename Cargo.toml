@@ -33,5 +33,6 @@ openssl = "0.10"
 
 byte_string = "1.0.0"
 
-tokio = { version = "1.20.0", features = ["macros", "rt-multi-thread"] }
+tokio = { version = "1.20.0", features = ["full"] }
 
+stopwatch = "0.0.7"

@@ -7,7 +7,7 @@ use ntex::util::ByteString;
 use ntex::util::Bytes;
 use ntex::{service::fn_service, util::Ready};
 
-
+use tokio::{runtime::Runtime, spawn};
 
 
 //use async_std::task;
@@ -52,7 +52,7 @@ use std::{thread, time};
 
 
 static mut ONE_KG_VALUE: f32 = 130670.0;
-const PRICE_PER_KG: f32 = 2.30;
+const PRICE_PER_KG: f32 = 12.0;
 const N: f32 = 30.0;
 const READ_LOOP_COUNT: u8 = 5;
 
@@ -66,6 +66,7 @@ const HEIGHT: i32 = 768;
 static mut kgval : f32 = 0.0;
 static mut calib_flag: bool = false;
 static mut payment_flag: bool = false;
+static mut payment_success_flag: bool = false;
 static mut amount : f32 = 0.0;
 
 #[derive(Debug)]
@@ -116,12 +117,19 @@ fn callback(app: app::App) {
     app::repeat_timeout(0.05, Box::new(move || {
         callback(app);
     }));
+
 }
 
 fn add_product(product: String, quantity: u32){
     //let mut s: &str = &format!("{}: \n{} g.", product, quantity).to_owned();
     
    // let mut bar4 = frame::Frame::new(0, 0, 200, 90, s);
+}
+
+async fn wait_for_response(){
+    println!("Waiting for response..........");
+    sleep(Millis(30_000)).await;
+    println!("Time's up..........");
 }
 
 
@@ -143,11 +151,10 @@ async fn main() -> Result<(), Error> {
     env_logger::init();
 
     
-
-
     
 
-    let client = v5::client::MqttConnector::new("dev.mqtt.averato.com:8883")
+
+    let client = v5::client::MqttConnector::new("mqtt.averato.com:8883")
         .connector(Connector::new(builder.build()))
         .client_id("raspberrypi")
         .username(username)
@@ -157,7 +164,6 @@ async fn main() -> Result<(), Error> {
         .await
         .unwrap();
     
-    
 
     let sink = client.sink();
     
@@ -166,8 +172,15 @@ async fn main() -> Result<(), Error> {
         match control {
             v5::client::ControlMessage::Publish(publish) => {
                 println!("MESSAGE RECEIVED, INCOMING!!!!!");
-                //let a = publish.packet().payload.clone();
+                let a = publish.packet().payload.clone();
                 println!("{:?}", publish.packet().payload);
+                unsafe{
+                    println!("MESSAGE = {:?}", a);
+
+                    if a == "REQ_PAYMENT_SUCCESS"{
+                        payment_success_flag = true;
+                    }
+                }
                 log::info!(
                     "incoming publish: {:?} -> {:?} payload {:?}",
                     publish.packet().packet_id,
@@ -223,7 +236,7 @@ async fn main() -> Result<(), Error> {
 
     println!{"SENDING MESSAGE!!!"};
     log::info!("sending client publish");
-    let ack = sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "0.59&BGN".into()).send_at_least_once().await.unwrap();
+    let ack = sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", "CONNECTED".into()).send_at_least_once().await.unwrap();
     println!{"SENDING MESSAGE COMPLETE!!!"};
     log::info!("ack received: {:?}", ack);
     
@@ -257,9 +270,10 @@ async fn main() -> Result<(), Error> {
         new_customer_btn.hide();
     let mut calibration_btn = button::Button::new(60, 160, 200, 110, "Calibration")
         .below_of(&new_customer_btn, 10);
+        calibration_btn.hide();
     let mut calib_label = frame::Frame::new(220, 170, 220, 40, "Put 1 kg. weight\nto calibrate.")
         .below_of(&calibration_btn, 30);
-    //calib_label.hide();    
+    calib_label.hide();    
     let mut product_label = frame::Frame::new(300, 170, 300, 40, "Hazelnuts");
         //.with_size(300, 40)
         //.below_of(&bar, 200);
@@ -268,46 +282,53 @@ async fn main() -> Result<(), Error> {
         //.with_label("Hazelnuts");
     let mut calc_status = frame::Frame::default()
         .with_size(300, 60)
-        .below_of(&product_label, 90)
+        .below_of(&product_label, 60)
     // .with_align(Align::Center)
         .with_label("");
     let mut weight_lbl = frame::Frame::default()
         .with_size(350, 60)
         //.size_of(&calc_status)
-        .below_of(&calc_status, 90)
+        .below_of(&calc_status, 60)
         //.with_align(Align::Center)
         .with_label("--- g.");
-    let mut confirm_btn = button::Button::new(350, HEIGHT - 120, 180, 80, "Confirm");
+    let mut eur_label = frame::Frame::default()
+        .with_size(350, 60)
+        .with_label("")
+        .below_of(&weight_lbl, 20);    
+    let mut confirm_btn = button::Button::new(330, HEIGHT - 120, 220, 110, "PAY");
     // .below_of(&weight_lbl, 30);
         confirm_btn.hide();
-    let mut products_bar = frame::Frame::new(WIDTH - 250, 90, 200, 90, "Products added:")
-        .with_align(Align::Right | Align::Inside);
+    // let mut products_bar = frame::Frame::new(WIDTH - 250, 90, 200, 90, "Products added:")
+    //     .with_align(Align::Right | Align::Inside);
     //let mut pay_btn = button::Button::new(WIDTH - 230, HEIGHT - 120, 220, 110, "Pay"); //@+6plus
     //let mut spin = Progress::new(0,0,0);
+
+    
+
     let mut pay_btn: AsyncListener<_> = button::Button::new(WIDTH - 230, HEIGHT - 120, 220, 110, "Pay")
     // .with_label("Pay")
     // .with_size(220, 110)
    
     .into();
-
+    pay_btn.hide();
 
     // let mut scroll = group::Scroll::new(WIDTH - 240, 30, 250, HEIGHT-150, "Products taken")
     //     .with_type(group::ScrollType::Vertical)
     //     .below_of(&products_bar, 10);
     
-    let mut scroll = group::Scroll::new(WIDTH - 320, 50, 250, HEIGHT-300, None)
-        .with_type(group::ScrollType::Vertical)
-        .below_of(&products_bar, 0);
-    let mut scrollbar = scroll.scrollbar();
-        scrollbar.set_type(valuator::ScrollbarType::VerticalNice);
-    let mut pack = group::Pack::default_fill();
+    // let mut scroll = group::Scroll::new(WIDTH - 320, 50, 250, HEIGHT-300, None)
+    //     .with_type(group::ScrollType::Vertical)
+    //     .below_of(&products_bar, 0);
+    // let mut scrollbar = scroll.scrollbar();
+    //     scrollbar.set_type(valuator::ScrollbarType::VerticalNice);
+    // let mut pack = group::Pack::default_fill();
     // pack.begin();
     
     
     // pack.end();
     //scroll.scroll_to(0, 0);
     
-    scroll.end();
+    //scroll.end();
 
 
 
@@ -339,8 +360,8 @@ async fn main() -> Result<(), Error> {
     
     
 
-    products_bar.set_frame(FrameType::FlatBox);
-    products_bar.set_label_size(22);
+    // products_bar.set_frame(FrameType::FlatBox);
+    // products_bar.set_label_size(22);
     // products_bar.set_label_color(Color::White);
     // products_bar.set_color(GREEN);
     // products_bar.draw(|b| {
@@ -355,6 +376,11 @@ async fn main() -> Result<(), Error> {
 
     weight_lbl.set_label_size(46);
     weight_lbl.set_label_color(GRAY);
+
+    
+    eur_label.set_label_size(32);
+    eur_label.set_label_color(GRAY);
+
     calib_label.set_label_size(15);
     pay_btn.set_color(BLUE);
     pay_btn.set_selection_color(SEL_BLUE);
@@ -384,50 +410,9 @@ async fn main() -> Result<(), Error> {
         
         enums::Event::Push => {
             println!("Pay pushed");
-                let mut win2 = win.clone();
-                unsafe{
-                    let mut payment_win = window::Window::default()
-                    .with_size(800, 530)
-                    .center_of(&win2)
-                    .with_label("Payment - Smart Cafeteria");
-                    
-                    let mut pay_title_lbl = frame::Frame::new(0, 50, 800, 80, "Payment request sent.");
-                    pay_title_lbl.set_label_size(25);
-                    pay_title_lbl.set_label_color(BLUE);
-                    
                 
+            
                 
-                    let mut pay_amount_lbl = frame::Frame::new(0, 0, 800, 80, "0.00 BGN")
-                        .below_of(&pay_title_lbl, 30);
-                    
-                    unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
-                    pay_amount_lbl.set_label_size(45);
-
-
-
-
-                    let mut info_lbl = frame::Frame::new(0, 0, 800, 80, 
-                        "Open your Averato wallet app and scan the QR code on the tablet.\nWaiting for payment confirmation...")
-                        .below_of(&pay_amount_lbl, 10);
-                    info_lbl.set_label_size(21);
-                    let mut close_pay_dial_btn = button::Button::new(250, 430, 300, 80, "Close");
-                    
-
-                    close_pay_dial_btn.set_color(BLUE);
-                    close_pay_dial_btn.set_selection_color(SEL_BLUE);
-                    close_pay_dial_btn.set_label_color(Color::White);
-                    close_pay_dial_btn.set_label_size(25);
-                    
-                    payment_win.end();
-                    //payment_win.make_resizable(true);
-                
-                    payment_win.show();
-                    close_pay_dial_btn.set_callback(move |_| {
-                    
-                        payment_win.hide();
-                    });
-                    payment_flag = true;
-                }
             
             true
         }
@@ -440,22 +425,23 @@ async fn main() -> Result<(), Error> {
     
         println!("Confirm pressed");
         
+        unsafe{payment_flag = true;}
 
-        let mut bar_x = frame::Frame::new(0, 0, 200, 40, "Hazelnuts");
-        bar_x.set_label_size(21);
-        pack.add(&bar_x);
-        unsafe{
-            let mut bar_y = frame::Frame::default()
-                .with_label(format!("{:.0} g.", (kgval)).as_str())
-                .with_size(200, 40);
-                bar_y.set_label_size(19);
-            let mut bar_p = frame::Frame::default()
-                .with_label(format!("{:.2} BGN\n_____________", (amount)).as_str())
-                .with_size(200, 30);  
-                bar_p.set_label_size(22);    
-                pack.add(&bar_y);
-                pack.add(&bar_p);
-        }
+        // let mut bar_x = frame::Frame::new(0, 0, 200, 40, "Hazelnuts");
+        // bar_x.set_label_size(21);
+        // pack.add(&bar_x);
+        // unsafe{
+        //     let mut bar_y = frame::Frame::default()
+        //         .with_label(format!("{:.0} g.", (kgval)).as_str())
+        //         .with_size(200, 40);
+        //         bar_y.set_label_size(19);
+        //     let mut bar_p = frame::Frame::default()
+        //         .with_label(format!("{:.2} EUR\n_____________", (amount)).as_str())
+        //         .with_size(200, 30);  
+        //         bar_p.set_label_size(22);    
+        //         pack.add(&bar_y);
+        //         pack.add(&bar_p);
+        // }
         
         
     });
@@ -583,6 +569,7 @@ async fn main() -> Result<(), Error> {
         }
         adc.adc_val /= READ_LOOP_COUNT as f32;
         adc.tara_val = adc.adc_val - adc.zero_val;
+        
         unsafe{adc.kg_val = adc.tara_val / ONE_KG_VALUE;}
     
         println!(
@@ -610,7 +597,7 @@ async fn main() -> Result<(), Error> {
             lcd.write_str("Almost there...");
             calc_status.set_label("Almost there...");
             confirm_btn.hide();
-
+            eur_label.hide();
             flag = true;
             counter = 0;
         }
@@ -637,15 +624,17 @@ async fn main() -> Result<(), Error> {
                 else if adc.kg_val.abs() > 0.001 {
                     println!("{:.3} added to customer", adc.kg_val);
                     //unsafe{
-                        kgval = (adc.kg_val*1000.0).abs();
+                        kgval = (adc.kg_val * 1000.0).abs();
                         amount = (adc.kg_val * PRICE_PER_KG).abs();
                         println!("{}", kgval);
                     //}
                     lcd.set_cursor_pos(40);
                     lcd.write_str("Hazelnuts:      ");
-                    calc_status.set_label("Done.\n\nPress Confirm to continue or\nreturn the food to reset.");
+                    calc_status.set_label("Done.\n\nPress Pay to continue.");
                     confirm_btn.show();
-                    
+                    let s1 = format!("{:.2} EUR", amount);
+                    eur_label.show();
+                    eur_label.set_label(&s1);
                 }
                 else{
                     println!("Quantity returned");
@@ -663,6 +652,8 @@ async fn main() -> Result<(), Error> {
             if payment_flag == true{
                 payment_flag = false;
 
+                //payment_bar.show();
+
                 // let mut builder1 = ssl::SslConnector::builder(ssl::SslMethod::tls()).unwrap();
                 // builder1.set_verify(ssl::SslVerifyMode::NONE);
                 // let username1 = ByteString::from("blackseachain_demo_rpi");
@@ -678,34 +669,154 @@ async fn main() -> Result<(), Error> {
                 // .await
                 // .unwrap();
             
-                // let sink2 = client2.sink();
+                let sink2 = sink.clone();
 
-                // let router2 = client2.resource("dev.mqtt.averato.com:8883", publish);
-                // ntex::rt::spawn(router2.start_default());
                 
-                sleep(Millis(1_000)).await;
+                ntex::rt::spawn(async move {
+                    sleep(Millis(1_000)).await;
+                    println!{"SENDING MESSAGE!!!"};
+                    log::info!("sending client publish");
+                    let ack2 = sink2.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{:.2}&BGN", amount).into()).send_at_least_once().await.unwrap();
+                    
+                    println!{"SENDING MESSAGE COMPLETE!!!"};
+                    log::info!("ack received: {:?}", ack2);
+                    //let handle = tokio::spawn(wait_for_response());
+                    sleep(Millis(2_000)).await;
+                    println!("Waiting for response. Entering continuous loop.......");
+                    let mut c = 0;
 
-                // sink2.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{:.2}&BGN", amount).into()).send_at_least_once().await.unwrap();
-                println!{"SENDING MESSAGE!!!"};
-                log::info!("sending client publish");
-                let ack2 = sink.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("{:.2}&BGN", amount).into()).send_at_least_once().await.unwrap();
+                    
+                    loop{
+
+                        sleep(Millis(1_000)).await;
+                        println!("LOOP....");
+                        if payment_success_flag == true{
+                            //handle.abort();
+                            println!("ABORTED. CONTINUE!");
+                            payment_success_flag = false;
+
+                            //let mut win2 = win.clone();
+                            unsafe{
+                                let mut payment_win = window::Window::default()
+                                .with_size(500, 400)
+                                .center_of_parent()
+                                .with_label("Payment - Smart Cafeteria");
+                                
+                                let mut pay_title_lbl = frame::Frame::new(0, 30, 500, 70, "Payment processed!");
+                                pay_title_lbl.set_label_size(23);
+                                pay_title_lbl.set_label_color(BLUE);
+                                
+                            
+                            
+                                let mut pay_amount_lbl = frame::Frame::new(0, 0, 500, 70, "0.00 EUR")
+                                    .below_of(&pay_title_lbl, 10);
+                                
+                                unsafe{pay_amount_lbl.set_label(format!("{:.2} EUR", amount).as_str());}
+                                pay_amount_lbl.set_label_size(45);
+
+
+
+
+                                let mut info_lbl = frame::Frame::new(0, 0, 500, 80, 
+                                    "You can now close this window.")
+                                    .below_of(&pay_amount_lbl, 10);
+                                info_lbl.set_label_size(18);
+                                let mut close_pay_dial_btn = button::Button::new(100, 0, 500, 80, "Close")
+                                    .below_of(&info_lbl, 20);
+                                
+
+                                close_pay_dial_btn.set_color(BLUE);
+                                close_pay_dial_btn.set_selection_color(SEL_BLUE);
+                                close_pay_dial_btn.set_label_color(Color::White);
+                                close_pay_dial_btn.set_label_size(25);
+                                
+                                payment_win.end();
+                                //payment_win.make_resizable(true);
+                            
+                                payment_win.show();
+                                
+                                
+                                adc.zero_val = adc.adc_val;
+                                
+                                close_pay_dial_btn.set_callback(move |_| {
+                                
+                                    payment_win.hide();
+                                });
+                            }
+                            break;
+                        }
+                        else if c >= 60{
+                            println!("SESSION EXPIRED!");
+                            sink2.publish("blackseachain-demo-vnd/rpi/vpos-client/msg", format!("SESSION_EXPIRED").into()).send_at_least_once().await.unwrap();
+                            unsafe{
+                                let mut payment_win = window::Window::default()
+                                .with_size(500, 350)
+                                .center_of_parent()
+                                .with_label("Payment - Smart Cafeteria");
+                                
+                                let mut pay_title_lbl = frame::Frame::new(0, 30, 500, 70, "Session expired!");
+                                pay_title_lbl.set_label_size(23);
+                                pay_title_lbl.set_label_color(BLUE);
+                                
+                            
+                            
+                                //let mut pay_amount_lbl = frame::Frame::new(0, 0, 500, 70, "0.00 BGN")
+                                //    .below_of(&pay_title_lbl, 10);
+                                
+                                //unsafe{pay_amount_lbl.set_label(format!("{:.2} BGN", amount).as_str());}
+                                //pay_amount_lbl.set_label_size(45);
+
+
+
+
+                                let mut info_lbl = frame::Frame::new(0, 0, 500, 80, 
+                                    "Close this window and try again.")
+                                    .below_of(&pay_title_lbl, 10);
+                                info_lbl.set_label_size(18);
+                                let mut close_pay_dial_btn = button::Button::new(100, 0, 500, 80, "Close")
+                                    .below_of(&info_lbl, 20);
+                                
+
+                                close_pay_dial_btn.set_color(BLUE);
+                                close_pay_dial_btn.set_selection_color(SEL_BLUE);
+                                close_pay_dial_btn.set_label_color(Color::White);
+                                close_pay_dial_btn.set_label_size(25);
+                                
+                                payment_win.end();
+                                //payment_win.make_resizable(true);
+                            
+                                payment_win.show();
+                                close_pay_dial_btn.set_callback(move |_| {
+                                
+                                    payment_win.hide();
+                                });
+                            }
+                            
+                            
+                            
+                            
+                            break;
+                        }
+                        else {
+                            c += 1;
+                        }
+                        //app.redraw();
+                        
+                    }
+
+                   
+                    
+                    println!("Got out of the loop");
+                    
+                }).await;
                 
-                println!{"SENDING MESSAGE COMPLETE!!!"};
-                log::info!("ack received: {:?}", ack2);
-                sleep(Millis(60_000)).await;
-    
-                
+                println!("Got out of spawn. Continuing with other tasks");
             }
         }
     }  
 
     
     Ok(()) 
-    
-    
-    
-   
-    
     
     
 }
